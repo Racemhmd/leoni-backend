@@ -63,6 +63,30 @@ export class UsersService implements OnApplicationBootstrap {
             await this.usersRepository.save(adminUser);
             console.log(`Initial Admin User (${adminMatricule}) seeded.`);
         }
+
+        // 3. Seed "Rahma" (Employee)
+        const employeeMatricule = '10368447';
+        const employeeExists = await this.usersRepository.findOne({ where: { matricule: employeeMatricule } });
+
+        if (!employeeExists) {
+            console.log('Seeding Test Employee User (Rahma)...');
+            const employeeRole = await this.roleRepository.findOne({ where: { name: 'EMPLOYEE' } });
+            const hashedPassword = await bcrypt.hash('password123', 10);
+
+            const employeeUser = this.usersRepository.create({
+                matricule: employeeMatricule,
+                fullName: 'Rahma',
+                password: hashedPassword,
+                role: employeeRole || undefined,
+                pointsBalance: 150, // Enough points to test consumption
+                mustChangePassword: true,
+                isActive: true,
+                department: 'Production'
+            });
+
+            await this.usersRepository.save(employeeUser);
+            console.log(`Test Employee User (${employeeMatricule}) seeded.`);
+        }
     }
 
     async findOneByMatricule(matricule: string): Promise<User | null> {
