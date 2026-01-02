@@ -33,8 +33,7 @@ export class AuditLog {
     @Column()
     action: string; // 'CREATE_USER', 'DELETE_USER', 'ADJUST_POINTS', etc.
 
-    @Column()
-    action: string; // 'CREATE_USER', 'DELETE_USER', 'ADJUST_POINTS', etc.
+
 
     @Column({ type: 'text', nullable: true })
     details: string; // JSON string or text details (e.g. old vs new value)

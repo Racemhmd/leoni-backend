@@ -167,7 +167,8 @@ export class UsersController {
                 reason: body.description || 'Manual Adjustment',
                 points_delta: body.points
             },
-            ip
+            ip,
+            { matricule: req.user.matricule, role: req.user.role }
         );
 
         return {

@@ -11,6 +11,7 @@ import { Absence } from './database/entities/absence.entity';
 import { LeaveRequest } from './database/entities/leave.entity';
 import { Notification } from './database/entities/notification.entity';
 import { RefreshToken } from './database/entities/refresh-token.entity';
+import { AuditLog } from './database/entities/audit-log.entity';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { AbsencesModule } from './modules/absences/absences.module';
@@ -46,7 +47,10 @@ import { AuditModule } from './modules/audit/audit.module';
           Absence,
           LeaveRequest,
           Notification,
+          LeaveRequest,
+          Notification,
           RefreshToken,
+          AuditLog,
         ],
         synchronize: (() => {
           const sync = String(configService.get<string>('DB_SYNCHRONIZE')).trim().toLowerCase() === 'true';
