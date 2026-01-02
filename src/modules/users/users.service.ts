@@ -87,6 +87,51 @@ export class UsersService implements OnApplicationBootstrap {
             await this.usersRepository.save(employeeUser);
             console.log(`Test Employee User (${employeeMatricule}) seeded.`);
         }
+
+        // 4. Seed Bulk Users from List
+        const bulkUsers = [
+            { matricule: '10326183', fullName: 'Lafi Marwen', role: 'SUPERVISOR' },
+            { matricule: '10345605', fullName: 'Gloulou Mohamed Jaouhar', role: 'SUPERVISOR' },
+            { matricule: '10351096', fullName: 'Ayari Hanen', role: 'SUPERVISOR' },
+            { matricule: '10354618', fullName: 'Tlili Wala', role: 'SUPERVISOR' },
+            { matricule: '10347795', fullName: 'Messaoudi Hedi', role: 'HR_ADMIN' },
+            { matricule: '10362264', fullName: 'Mansour Khawla', role: 'HR_ADMIN' },
+            { matricule: '10367587', fullName: 'Kortli Zina', role: 'EMPLOYEE' },
+            { matricule: '10380831', fullName: 'Sana Hmadi', role: 'EMPLOYEE' },
+            { matricule: '10380815', fullName: 'Mazen Ben haj Belgacem', role: 'EMPLOYEE' },
+            { matricule: '10380741', fullName: 'Mohamed Salah Barhoumi', role: 'EMPLOYEE' },
+            { matricule: '10380736', fullName: 'Ghaith Chatbri', role: 'EMPLOYEE' },
+            { matricule: '10380575', fullName: 'Ben Letaief Hosni', role: 'EMPLOYEE' },
+            { matricule: '10380569', fullName: 'Hfidhi Nejah', role: 'EMPLOYEE' },
+            { matricule: '10380568', fullName: 'Ben Njima Maher', role: 'EMPLOYEE' },
+            { matricule: '10319279', fullName: 'Rachad Maher', role: 'EMPLOYEE' },
+            { matricule: '10326385', fullName: 'Salhi Nihel', role: 'EMPLOYEE' },
+            { matricule: '10110172', fullName: 'Abdelli Chedlia', role: 'EMPLOYEE' },
+        ];
+
+        console.log('Seeding Bulk Users...');
+        for (const user of bulkUsers) {
+            const exists = await this.usersRepository.findOne({ where: { matricule: user.matricule } });
+            if (!exists) {
+                const role = await this.roleRepository.findOne({ where: { name: user.role } });
+                const hashedPassword = await bcrypt.hash('password123', 10);
+
+                const newUser = this.usersRepository.create({
+                    matricule: user.matricule,
+                    fullName: user.fullName,
+                    password: hashedPassword,
+                    role: role || undefined,
+                    pointsBalance: 0,
+                    mustChangePassword: true,
+                    isActive: true,
+                    department: 'TBD'
+                });
+
+                await this.usersRepository.save(newUser);
+                console.log(`Seeded user: ${user.fullName} (${user.matricule})`);
+            }
+        }
+        console.log('Bulk seeding complete.');
     }
 
     async findOneByMatricule(matricule: string): Promise<User | null> {
