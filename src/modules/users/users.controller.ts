@@ -138,21 +138,39 @@ export class UsersController {
         // But wait, PointsController had 'adjust' calling 'addPoints'. 
         // Let's use logic: if points > 0 add, if < 0 deduct.
 
+        const oldBalance = user.pointsBalance;
+
         if (body.points > 0) {
             await this.pointsService.addPoints(user.id, body.points, body.type || 'ADJUSTED', body.description || 'Manual Adjustment');
         } else {
+            // PointsService.deductPoints already checks for insufficient balance (< 0)
             await this.pointsService.deductPoints(user.id, Math.abs(body.points), body.type || 'ADJUSTED', body.description || 'Manual Adjustment');
         }
+
+        // Refetch to get updated balance
+        const updatedUser = await this.usersService.findById(user.id);
+        const newBalance = updatedUser ? updatedUser.pointsBalance : oldBalance + body.points;
 
         await this.auditService.log(
             req.user.id,
             'ADJUST_POINTS',
             user.id,
             'User',
-            { points: body.points, type: body.type, description: body.description },
+            {
+                admin_matricule: req.user.matricule,
+                employee_matricule: user.matricule,
+                old_balance: oldBalance,
+                new_balance: newBalance,
+                reason: body.description || 'Manual Adjustment',
+                points_delta: body.points
+            },
             ip
         );
 
-        return { message: 'Points adjusted successfully' };
+        return {
+            message: 'Points adjusted successfully',
+            old_balance: oldBalance,
+            new_balance: newBalance
+        };
     }
 }
