@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../database/entities/user.entity';
@@ -7,7 +7,7 @@ import * as xlsx from 'xlsx';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
-export class UsersService implements OnModuleInit {
+export class UsersService implements OnApplicationBootstrap {
     constructor(
         @InjectRepository(User)
         private usersRepository: Repository<User>,
@@ -15,8 +15,16 @@ export class UsersService implements OnModuleInit {
         private roleRepository: Repository<Role>,
     ) { }
 
-    async onModuleInit() {
-        await this.seedDatabase();
+    async onApplicationBootstrap() {
+        // Wait a short moment to ensure DB connection and sync is fully complete
+        // This is a safety measure against race conditions on slower cloud environments
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        try {
+            await this.seedDatabase();
+        } catch (error) {
+            console.error('Error during database seeding:', error);
+        }
     }
 
     async seedDatabase() {

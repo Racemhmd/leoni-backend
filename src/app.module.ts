@@ -48,7 +48,11 @@ import { AuditModule } from './modules/audit/audit.module';
           Notification,
           RefreshToken,
         ],
-        synchronize: String(configService.get<string>('DB_SYNCHRONIZE')).toLowerCase() === 'true', // Auto-create tables (safe to be false in prod)
+        synchronize: (() => {
+          const sync = String(configService.get<string>('DB_SYNCHRONIZE')).trim().toLowerCase() === 'true';
+          console.log(`[Database] Synchronize: ${sync} (Value: "${configService.get<string>('DB_SYNCHRONIZE')}")`);
+          return sync;
+        })(), // Auto-create tables (safe to be false in prod)
       }),
       inject: [ConfigService],
     }),
