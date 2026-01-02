@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../database/entities/user.entity';
@@ -7,13 +7,55 @@ import * as xlsx from 'xlsx';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
-export class UsersService {
+export class UsersService implements OnModuleInit {
     constructor(
         @InjectRepository(User)
         private usersRepository: Repository<User>,
         @InjectRepository(Role)
         private roleRepository: Repository<Role>,
     ) { }
+
+    async onModuleInit() {
+        await this.seedDatabase();
+    }
+
+    async seedDatabase() {
+        // 1. Seed Roles
+        if (await this.roleRepository.count() === 0) {
+            console.log('Seeding Roles...');
+            const roles = [
+                { name: 'EMPLOYEE', description: 'Regular employee with basic access' },
+                { name: 'SUPERVISOR', description: 'Team supervisor with approval rights' },
+                { name: 'HR_ADMIN', description: 'HR administrator with full access' },
+            ];
+            await this.roleRepository.save(roles);
+            console.log('Roles seeded.');
+        }
+
+        // 2. Seed Initial Admin User
+        const adminMatricule = '10364838';
+        const adminExists = await this.usersRepository.findOne({ where: { matricule: adminMatricule } });
+
+        if (!adminExists) {
+            console.log('Seeding Initial Admin User...');
+            const hrRole = await this.roleRepository.findOne({ where: { name: 'HR_ADMIN' } });
+            const hashedPassword = await bcrypt.hash('password123', 10);
+
+            const adminUser = this.usersRepository.create({
+                matricule: adminMatricule,
+                fullName: 'Racem Hamdi',
+                password: hashedPassword,
+                role: hrRole || undefined,
+                pointsBalance: 100,
+                mustChangePassword: true,
+                isActive: true,
+                department: 'HR'
+            });
+
+            await this.usersRepository.save(adminUser);
+            console.log(`Initial Admin User (${adminMatricule}) seeded.`);
+        }
+    }
 
     async findOneByMatricule(matricule: string): Promise<User | null> {
         return this.usersRepository.createQueryBuilder('user')
