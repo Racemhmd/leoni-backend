@@ -48,7 +48,7 @@ import { AuditModule } from './modules/audit/audit.module';
           Notification,
           RefreshToken,
         ],
-        synchronize: configService.get<string>('DB_SYNCHRONIZE') === 'true', // Auto-create tables (safe to be false in prod)
+        synchronize: String(configService.get<string>('DB_SYNCHRONIZE')).toLowerCase() === 'true', // Auto-create tables (safe to be false in prod)
       }),
       inject: [ConfigService],
     }),
