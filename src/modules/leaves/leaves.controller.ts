@@ -171,7 +171,7 @@ export class LeavesController {
             'REJECT_LEAVE',
             id,
             'LeaveRequest',
-            { reason: dto.rejectionReason },
+            { reason: dto.reviewNotes },
             ip,
             { matricule: req.user.matricule, role: req.user.role }
         );
