@@ -58,8 +58,10 @@ export class DashboardService {
 
     async getAdminStats() {
         const totalEmployees = await this.usersService.countEmployees();
+        const totalPoints = await this.pointsService.getTotalPointsDistributed();
         return {
-            totalEmployees
+            totalEmployees,
+            totalPoints
         };
     }
 }

@@ -132,6 +132,14 @@ export class PointsService {
         };
     }
 
+    async getTotalPointsDistributed(): Promise<number> {
+        // Option 1: Sum of all current balances (simpler, reflects current liability)
+        const result = await this.usersRepository.createQueryBuilder('user')
+            .select('SUM(user.pointsBalance)', 'total')
+            .getRawOne();
+        return result.total ? parseInt(result.total, 10) : 0;
+    }
+
     private isRestricted(user: User): boolean {
         // Check legacyRole or role relation
         const roleName = user.role ? user.role.name : user.legacyRole;
