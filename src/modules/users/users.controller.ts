@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException, Delete, Param, Patch, NotFoundException, Ip, Query } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException, Delete, Param, Patch, NotFoundException, Ip, Query, ForbiddenException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { PointsService } from '../points/points.service';
 import { AuditService } from '../audit/audit.service';
@@ -84,20 +84,23 @@ export class UsersController {
 
     @UseGuards(JwtAuthGuard, RolesGuard)
     @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(UserRole.HR_ADMIN, UserRole.EMPLOYEE, UserRole.SUPERVISOR) // Open to others to fetch lists (e.g. employee fetching supervisors)
+    @Roles(UserRole.HR_ADMIN, UserRole.SUPERVISOR)
     @Get()
-    async findAll(@Query('role') role?: string) {
-        if (role) {
-            return this.usersService.findByRole(role);
+    async findAll(@Request() req: any, @Query('role') role?: string) {
+        if (req.user.role === UserRole.HR_ADMIN) {
+            if (role) {
+                return this.usersService.findByRole(role);
+            }
+            return this.usersService.findAll();
+        } else if (req.user.role === UserRole.SUPERVISOR) {
+            // Supervisor sees only their team (users who have them as supervisor)
+            // Or maybe users in their 'department'? Requirement says "View team members only".
+            // Typically this means `supervisor_id = req.user.id`.
+            return this.usersService.findBySupervisor(req.user.id);
+        } else {
+            // Employees should not reach here due to @Roles, but safety check
+            throw new ForbiddenException('Access denied');
         }
-        // Only HR can list ALL
-        // But for specific role lookups, other roles might need permission?
-        // E.g. Employee needs to find Supervisor. 
-        // We adjusted the @Roles decorator above to allow EMPLOYEE and SUPERVISOR to access this endpoint too, 
-        // primarily for fetching specific roles. 
-        // Ideally we should restrict: non-HR can only list SUPERVISOR/HR_ADMIN roles, not other EMPLOYEES.
-        // For simplicity now, we allow reading the user list.
-        return this.usersService.findAll();
     }
 
     @UseGuards(JwtAuthGuard, RolesGuard)

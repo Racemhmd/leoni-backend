@@ -23,4 +23,12 @@ export class AuditService {
         });
         await this.auditRepository.save(log);
     }
+
+    async findAll(limit: number): Promise<AuditLog[]> {
+        return this.auditRepository.find({
+            order: { createdAt: 'DESC' },
+            take: limit,
+            relations: ['admin']
+        });
+    }
 }

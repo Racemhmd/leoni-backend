@@ -277,6 +277,13 @@ export class UsersService implements OnApplicationBootstrap {
         });
     }
 
+    async findBySupervisor(supervisorId: number): Promise<User[]> {
+        return this.usersRepository.find({
+            where: { supervisor: { id: supervisorId } },
+            relations: ['role']
+        });
+    }
+
     async remove(id: number): Promise<void> {
         await this.usersRepository.delete(id);
     }
