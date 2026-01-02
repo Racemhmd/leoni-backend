@@ -29,7 +29,11 @@ import { AuditModule } from './modules/audit/audit.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
-        host: configService.get<string>('DB_HOST'),
+        host: (() => {
+          const host = configService.get<string>('DB_HOST');
+          if (!host) throw new Error('DB_HOST is not defined in environment variables! Please set it in Render Dashboard.');
+          return host;
+        })(),
         port: configService.get<number>('DB_PORT'),
         username: configService.get<string>('DB_USER'),
         password: configService.get<string>('DB_PASSWORD'),
