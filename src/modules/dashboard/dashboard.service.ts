@@ -55,4 +55,11 @@ export class DashboardService {
             }
         };
     }
+
+    async getAdminStats() {
+        const totalEmployees = await this.usersService.countEmployees();
+        return {
+            totalEmployees
+        };
+    }
 }

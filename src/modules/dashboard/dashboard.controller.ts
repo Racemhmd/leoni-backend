@@ -19,4 +19,11 @@ export class DashboardController {
     async getDashboard(@Request() req: any) {
         return this.dashboardService.getEmployeeDashboard(req.user.id);
     }
+
+    @Get('admin/stats')
+    @Roles(UserRole.HR_ADMIN)
+    @ApiOperation({ summary: 'Get admin dashboard statistics' })
+    async getAdminStats() {
+        return this.dashboardService.getAdminStats();
+    }
 }

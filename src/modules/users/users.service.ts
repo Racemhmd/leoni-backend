@@ -280,4 +280,14 @@ export class UsersService implements OnApplicationBootstrap {
     async remove(id: number): Promise<void> {
         await this.usersRepository.delete(id);
     }
+
+    async countEmployees(): Promise<number> {
+        return this.usersRepository.count({
+            where: {
+                role: {
+                    name: 'EMPLOYEE'
+                }
+            }
+        });
+    }
 }
