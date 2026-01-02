@@ -10,7 +10,7 @@ export class AuditService {
         private auditRepository: Repository<AuditLog>,
     ) { }
 
-    async log(adminId: number, action: string, targetId?: number, targetEntity?: string, details?: Record<string, any>, ipAddress?: string) {
+    async log(adminId: number, action: string, targetId?: number, targetEntity?: string, details?: Record<string, any>, ipAddress?: string, performer?: { matricule: string, role: string }) {
         const log = this.auditRepository.create({
             adminId,
             action,
@@ -18,6 +18,8 @@ export class AuditService {
             targetEntity,
             details: details ? JSON.stringify(details) : undefined,
             ipAddress,
+            performerMatricule: performer?.matricule,
+            performerRole: performer?.role
         });
         await this.auditRepository.save(log);
     }

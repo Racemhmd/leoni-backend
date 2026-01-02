@@ -1,13 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { UsersService } from '../users/users.service';
-import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcryptjs';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class AuthService {
     constructor(
         private usersService: UsersService,
         private jwtService: JwtService,
+        private auditService: AuditService,
     ) { }
 
     async validateUser(matricule: string, pass: string): Promise<any> {
@@ -27,6 +25,23 @@ export class AuthService {
 
         if (await bcrypt.compare(pass, user.password)) {
             await this.usersService.logSuccessfulLogin(user.id);
+
+            // Log Login Audit
+            await this.auditService.log(
+                user.id,
+                'USER_LOGIN',
+                user.id,
+                'User',
+                { matricule: user.matricule },
+                undefined, // IP not easily available here, handled in Controller usually. 
+                // For now undefined, or we pass request to validateUser? 
+                // AuthGuard calls validateUser.
+                // Let's settle for no IP here for now or pass 'N/A'.
+                // The controller can't easily log this because Guard handles it.
+                // Guard doesn't pass IP.
+                { matricule: user.matricule, role: user.role?.name || 'EMPLOYEE' }
+            );
+
             const { password, ...result } = user;
             return result;
         }

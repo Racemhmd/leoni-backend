@@ -23,6 +23,16 @@ export class AuditLog {
     @Column({ name: 'target_entity', nullable: true })
     targetEntity: string; // 'User', 'PointTransaction', etc.
 
+    // Snapshot fields to preserve history if admin is deleted
+    @Column({ name: 'performer_matricule', nullable: true })
+    performerMatricule: string;
+
+    @Column({ name: 'performer_role', nullable: true })
+    performerRole: string;
+
+    @Column()
+    action: string; // 'CREATE_USER', 'DELETE_USER', 'ADJUST_POINTS', etc.
+
     @Column()
     action: string; // 'CREATE_USER', 'DELETE_USER', 'ADJUST_POINTS', etc.
 

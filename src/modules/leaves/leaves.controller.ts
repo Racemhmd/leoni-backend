@@ -22,12 +22,18 @@ import { ApproveLeaveRequestDto } from './dto/approve-leave-request.dto';
 import { UpdateLeaveStatusDto } from './dto/update-leave-status.dto';
 import { QueryLeaveRequestsDto } from './dto/query-leave-requests.dto';
 
+import { AuditService } from '../audit/audit.service';
+import { Ip } from '@nestjs/common';
+
 @ApiTags('leaves')
 @ApiBearerAuth()
 @Controller('leaves')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LeavesController {
-    constructor(private readonly leavesService: LeavesService) { }
+    constructor(
+        private readonly leavesService: LeavesService,
+        private readonly auditService: AuditService
+    ) { }
 
     @ApiOperation({ summary: 'Get available leave types' })
     @Roles(UserRole.EMPLOYEE, UserRole.SUPERVISOR, UserRole.HR_ADMIN)
@@ -97,23 +103,34 @@ export class LeavesController {
         return leaveRequest;
     }
 
-    /*
-    @ApiOperation({ summary: 'Approve leave request (Supervisor Step)' })
+    @ApiOperation({ summary: 'Approve leave request (Supervisor)' })
     @ApiResponse({ status: 200, description: 'Leave request approved by supervisor' })
     @Roles(UserRole.SUPERVISOR)
     @Patch(':id/approve/supervisor')
     async approveBySupervisor(
         @Param('id', ParseIntPipe) id: number,
         @Request() req: any,
-        @Body() dto: ApproveLeaveRequestDto, // We will use a separate DTO or reuse carefully
+        @Body() dto: ApproveLeaveRequestDto,
+        @Ip() ip: string
     ) {
-         if (!dto.assignToHrId) {
-             throw new ForbiddenException('HR Admin ID must be provided for supervisor approval');
-         }
-         return this.leavesService.approveBySupervisor(id, req.user.id, dto.assignToHrId, dto.reviewNotes);
+        if (!dto.assignToHrId) {
+            throw new ForbiddenException('HR Admin ID must be provided for supervisor approval');
+        }
+        const result = await this.leavesService.approveBySupervisor(id, req.user.id, dto.assignToHrId, dto.reviewNotes);
+
+        await this.auditService.log(
+            req.user.id,
+            'APPROVE_LEAVE_SUPERVISOR',
+            id,
+            'LeaveRequest',
+            { reviewNotes: dto.reviewNotes, assignedToHr: dto.assignToHrId },
+            ip,
+            { matricule: req.user.matricule, role: req.user.role }
+        );
+        return result;
     }
 
-    @ApiOperation({ summary: 'Approve leave request (HR Step)' })
+    @ApiOperation({ summary: 'Approve leave request (HR)' })
     @ApiResponse({ status: 200, description: 'Leave request finalized by HR' })
     @Roles(UserRole.HR_ADMIN)
     @Patch(':id/approve/hr')
@@ -121,10 +138,22 @@ export class LeavesController {
         @Param('id', ParseIntPipe) id: number,
         @Request() req: any,
         @Body() dto: ApproveLeaveRequestDto,
+        @Ip() ip: string
     ) {
-         return this.leavesService.approveByHr(id, req.user.id, dto.reviewNotes);
+        const result = await this.leavesService.approveByHr(id, req.user.id, dto.reviewNotes);
+
+        await this.auditService.log(
+            req.user.id,
+            'APPROVE_LEAVE_HR',
+            id,
+            'LeaveRequest',
+            { reviewNotes: dto.reviewNotes },
+            ip,
+            { matricule: req.user.matricule, role: req.user.role }
+        );
+        return result;
     }
-    
+
     @ApiOperation({ summary: 'Reject a leave request' })
     @ApiResponse({ status: 200, description: 'Leave request rejected successfully' })
     @Roles(UserRole.SUPERVISOR, UserRole.HR_ADMIN)
@@ -133,8 +162,19 @@ export class LeavesController {
         @Param('id', ParseIntPipe) id: number,
         @Request() req: any,
         @Body() dto: UpdateLeaveStatusDto,
+        @Ip() ip: string
     ) {
-         return this.leavesService.rejectLeaveRequest(id, req.user.id, dto);
+        const result = await this.leavesService.rejectLeaveRequest(id, req.user.id, dto);
+
+        await this.auditService.log(
+            req.user.id,
+            'REJECT_LEAVE',
+            id,
+            'LeaveRequest',
+            { reason: dto.rejectionReason },
+            ip,
+            { matricule: req.user.matricule, role: req.user.role }
+        );
+        return result;
     }
-    */
 }
