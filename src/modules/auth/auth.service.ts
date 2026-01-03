@@ -55,20 +55,26 @@ export class AuthService {
     }
 
     async login(user: any) {
+        const role = user.role?.name || 'EMPLOYEE';
         const payload = {
             username: user.matricule, // kept for backward compatibility if any
             matricule: user.matricule,
             sub: user.id,
-            role: user.role?.name || 'EMPLOYEE',
+            role: role,
             full_name: user.fullName,
             mustChangePassword: user.mustChangePassword
         };
+
+        // Filter user object for frontend
+        const userResponse = { ...user, role: payload.role };
+        if (role !== 'EMPLOYEE') {
+            delete userResponse.pointsBalance;
+            delete userResponse.points_balance; // Just in case of different naming conventions in the object
+        }
+
         return {
             access_token: this.jwtService.sign(payload),
-            user: {
-                ...user,
-                role: payload.role // Ensure frontend gets the string role immediately
-            },
+            user: userResponse,
         };
     }
 

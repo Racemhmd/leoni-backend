@@ -37,12 +37,25 @@ export class AuthController {
             throw new NotFoundException('User not found');
         }
 
-        return {
+        const role = user.role?.name || 'EMPLOYEE';
+
+        const response: any = {
             matricule: user.matricule,
             full_name: user.fullName,
-            role: user.role?.name || 'EMPLOYEE',
-            points_balance: user.pointsBalance,
-            leave_balance: user.leaveBalance
+            role: role,
+        };
+
+        if (role === 'EMPLOYEE') {
+            response.points_balance = user.pointsBalance;
+        }
+
+        // return response; // Just return strict structure
+        return {
+            ...response,
+            leave_balance: user.leaveBalance // Keep leave balance for all or restrict? User asked for points mainly. 
+            // "HR_ADMIN and SUPERVISOR users must NOT have points balance"
+            // Rules didn't explicitly safeguard leave_balance but context implies "Employee Dashboard" features.
+            // I'll leave leave_balance for now as it wasn't strictly forbidden like points.
         };
     }
 

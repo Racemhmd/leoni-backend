@@ -10,14 +10,14 @@ import { UserRole } from '../../database/entities/user.entity';
 export class PointsController {
     constructor(private readonly pointsService: PointsService) { }
 
-    @Roles(UserRole.EMPLOYEE, UserRole.SUPERVISOR, UserRole.HR_ADMIN)
+    @Roles(UserRole.EMPLOYEE)
     @Get('balance')
     async getBalance(@Request() req: any) {
         const points = await this.pointsService.getBalance(req.user.id);
         return { points };
     }
 
-    @Roles(UserRole.EMPLOYEE, UserRole.SUPERVISOR, UserRole.HR_ADMIN)
+    @Roles(UserRole.EMPLOYEE)
     @Get('history')
     async getHistory(@Request() req: any) {
         return this.pointsService.getHistory(req.user.id);
