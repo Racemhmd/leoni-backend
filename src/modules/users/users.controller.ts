@@ -83,6 +83,20 @@ export class UsersController {
     }
 
     @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.EMPLOYEE, UserRole.SUPERVISOR, UserRole.HR_ADMIN)
+    @Get('supervisors')
+    async getSupervisors() {
+        return this.usersService.findSupervisors();
+    }
+
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.EMPLOYEE, UserRole.SUPERVISOR, UserRole.HR_ADMIN)
+    @Get('hr-admins')
+    async getHrAdmins() {
+        return this.usersService.findHrAdmins();
+    }
+
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.HR_ADMIN, UserRole.SUPERVISOR)
     @Get()

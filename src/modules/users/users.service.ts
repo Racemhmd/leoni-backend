@@ -284,6 +284,32 @@ export class UsersService implements OnApplicationBootstrap {
         });
     }
 
+    async findSupervisors(): Promise<User[]> {
+        return this.usersRepository.find({
+            where: {
+                role: {
+                    name: 'SUPERVISOR'
+                },
+                isActive: true
+            },
+            select: ['id', 'matricule', 'fullName'],
+            order: { fullName: 'ASC' }
+        });
+    }
+
+    async findHrAdmins(): Promise<User[]> {
+        return this.usersRepository.find({
+            where: {
+                role: {
+                    name: 'HR_ADMIN'
+                },
+                isActive: true
+            },
+            select: ['id', 'matricule', 'fullName'],
+            order: { fullName: 'ASC' }
+        });
+    }
+
     async remove(id: number): Promise<void> {
         await this.usersRepository.delete(id);
     }

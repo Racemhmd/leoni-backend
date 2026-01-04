@@ -41,7 +41,7 @@ export class AuthController {
 
         const response: any = {
             matricule: user.matricule,
-            full_name: user.fullName,
+            fullName: user.fullName,
             role: role,
         };
 

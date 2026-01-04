@@ -167,16 +167,28 @@ export class LeavesService {
             }
         }
 
-        // Validate Supervisor existence
-        const supervisor = await this.userRepository.findOne({ where: { id: dto.supervisorId } });
+        // Validate Supervisor existence and Role
+        const supervisor = await this.userRepository.findOne({ where: { id: dto.supervisorId }, relations: ['role'] });
         if (!supervisor) {
             throw new BadRequestException('Selected supervisor not found');
         }
+        if (supervisor.role?.name !== 'SUPERVISOR') {
+            throw new BadRequestException('Selected user is not a Supervisor');
+        }
+        if (supervisor.id === employeeId) {
+            throw new BadRequestException('You cannot select yourself as Supervisor');
+        }
 
-        // Validate HR Admin existence
-        const hrAdmin = await this.userRepository.findOne({ where: { id: dto.hrAdminId } });
+        // Validate HR Admin existence and Role
+        const hrAdmin = await this.userRepository.findOne({ where: { id: dto.hrAdminId }, relations: ['role'] });
         if (!hrAdmin) {
             throw new BadRequestException('Selected HR Admin not found');
+        }
+        if (hrAdmin.role?.name !== 'HR_ADMIN') {
+            throw new BadRequestException('Selected user is not an HR Admin');
+        }
+        if (hrAdmin.id === employeeId) {
+            throw new BadRequestException('You cannot select yourself as HR Admin');
         }
 
         // Create leave request
@@ -292,6 +304,17 @@ export class LeavesService {
         // Prevent self-rejection
         if (leaveRequest.employeeId === reviewerId) {
             throw new ForbiddenException('You cannot reject your own leave request');
+        }
+
+        // Validate ownership/authorisation
+        if (leaveRequest.status === LeaveStatus.PENDING_SUPERVISOR) {
+            if (leaveRequest.supervisorId !== reviewerId) {
+                throw new ForbiddenException('You are not the assigned supervisor for this request');
+            }
+        } else if (leaveRequest.status === LeaveStatus.PENDING_HR) {
+            if (leaveRequest.hrAdminId !== reviewerId) {
+                throw new ForbiddenException('You are not the assigned HR Admin for this request');
+            }
         }
 
         // Update leave request
