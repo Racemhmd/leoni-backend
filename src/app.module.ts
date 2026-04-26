@@ -12,6 +12,8 @@ import { LeaveRequest } from './database/entities/leave.entity';
 import { Notification } from './database/entities/notification.entity';
 import { RefreshToken } from './database/entities/refresh-token.entity';
 import { AuditLog } from './database/entities/audit-log.entity';
+import { Liquidation } from './database/entities/liquidation.entity';
+import { EmployeeSanction } from './database/entities/sanction-history.entity';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { AbsencesModule } from './modules/absences/absences.module';
@@ -20,6 +22,8 @@ import { LeavesModule } from './modules/leaves/leaves.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { LiquidationModule } from './modules/liquidation/liquidation.module';
+import { SanctionsModule } from './modules/sanctions/sanctions.module';
 
 @Module({
   imports: [
@@ -51,6 +55,8 @@ import { AuditModule } from './modules/audit/audit.module';
           Notification,
           RefreshToken,
           AuditLog,
+          Liquidation,
+          EmployeeSanction,
         ],
         synchronize: (() => {
           const sync = String(configService.get<string>('DB_SYNCHRONIZE')).trim().toLowerCase() === 'true';
@@ -68,6 +74,8 @@ import { AuditModule } from './modules/audit/audit.module';
     NotificationsModule,
     DashboardModule,
     AuditModule,
+    LiquidationModule,
+    SanctionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

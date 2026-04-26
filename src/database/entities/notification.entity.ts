@@ -2,10 +2,10 @@ import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, Jo
 import { User } from './user.entity';
 
 export enum NotificationType {
-    INFO = 'INFO',
-    WARNING = 'WARNING',
-    SUCCESS = 'SUCCESS',
-    ERROR = 'ERROR',
+    POINT_GAIN = 'POINT_GAIN',
+    POINT_LOSS = 'POINT_LOSS',
+    LEAVE_UPDATE = 'LEAVE_UPDATE',
+    REMINDER = 'REMINDER',
 }
 
 @Entity('notifications')
@@ -33,7 +33,7 @@ export class Notification {
     @Column({
         type: 'enum',
         enum: NotificationType,
-        default: NotificationType.INFO,
+        default: NotificationType.REMINDER,
     })
     type: NotificationType;
 

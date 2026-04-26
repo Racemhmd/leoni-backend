@@ -16,23 +16,33 @@ export class NotificationsService {
             employeeId: dto.employeeId,
             title: dto.title,
             message: dto.message,
-            type: dto.type || NotificationType.INFO,
+            type: dto.type || NotificationType.REMINDER,
         });
         return this.notificationsRepository.save(notification);
     }
 
-    async getUnreadNotifications(employeeId: number): Promise<Notification[]> {
-        return this.notificationsRepository.find({
+    async getUnreadNotifications(employeeId: number): Promise<any[]> {
+        const notifications = await this.notificationsRepository.find({
             where: { employeeId, isRead: false },
             order: { createdAt: 'DESC' },
+            relations: ['employee'],
+        });
+        return notifications.map(n => {
+            const { employee, ...rest } = n;
+            return { ...rest, targetMatricule: employee?.matricule };
         });
     }
 
-    async getAllNotifications(employeeId: number): Promise<Notification[]> {
-        return this.notificationsRepository.find({
+    async getAllNotifications(employeeId: number): Promise<any[]> {
+        const notifications = await this.notificationsRepository.find({
             where: { employeeId },
             order: { createdAt: 'DESC' },
             take: 50, // Limit to last 50 notifications
+            relations: ['employee'],
+        });
+        return notifications.map(n => {
+            const { employee, ...rest } = n;
+            return { ...rest, targetMatricule: employee?.matricule };
         });
     }
 

@@ -60,7 +60,7 @@ export class User {
   @JoinColumn({ name: 'supervisor_id' })
   supervisor: User;
 
-  @Column({ name: 'points_balance', default: 0 })
+  @Column({ name: 'points_balance', type: 'decimal', precision: 10, scale: 2, default: 0 })
   pointsBalance: number;
 
   @Column({ name: 'leave_balance', default: 0 })

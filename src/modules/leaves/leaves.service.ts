@@ -213,15 +213,21 @@ export class LeavesService {
             // We might want to rollback or mark as failed, but for now we keep it PENDING_LTG to retry?
         }
 
-        /* 
-        // Internal notification logic - Disabled as process happens in LTG
+        // Notify Supervisor
         await this.notificationsService.createNotification({
             employeeId: dto.supervisorId,
             title: 'New Leave Request',
-            message: `New request submitted to LTG.`,
-            type: NotificationType.INFO,
+            message: `A new leave request has been assigned to you for review.`,
+            type: NotificationType.LEAVE_UPDATE,
         });
-        */
+
+        // Notify Employee
+        await this.notificationsService.createNotification({
+            employeeId: employeeId,
+            title: 'Leave Request Submitted',
+            message: `Your leave request has been submitted.`,
+            type: NotificationType.LEAVE_UPDATE,
+        });
 
         return saved;
     }
@@ -253,7 +259,15 @@ export class LeavesService {
             employeeId: assignToHrId,
             title: 'Leave Request Pending HR Approval',
             message: `A leave request (approved by supervisor) needs your validation.`,
-            type: NotificationType.INFO,
+            type: NotificationType.LEAVE_UPDATE,
+        });
+
+        // Notify Employee
+        await this.notificationsService.createNotification({
+            employeeId: leave.employeeId,
+            title: 'Leave Request Approved',
+            message: `Your leave request has been approved by your supervisor.`,
+            type: NotificationType.LEAVE_UPDATE,
         });
 
         return saved;
@@ -330,7 +344,7 @@ export class LeavesService {
             employeeId: leaveRequest.employeeId,
             title: 'Leave Request Rejected',
             message: `Your leave request has been rejected. Reason: ${dto.reviewNotes || 'No reason provided'}`,
-            type: NotificationType.WARNING,
+            type: NotificationType.LEAVE_UPDATE,
         });
 
         return updated;

@@ -17,7 +17,7 @@ export class CreateNotificationDto {
     @IsString()
     message: string;
 
-    @ApiProperty({ enum: NotificationType, default: NotificationType.INFO })
+    @ApiProperty({ enum: NotificationType, default: NotificationType.REMINDER })
     @IsEnum(NotificationType)
     @IsOptional()
     type?: NotificationType;

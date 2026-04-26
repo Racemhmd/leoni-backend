@@ -7,6 +7,23 @@ export enum TransactionType {
     DEDUCTED = 'DEDUCTED',
     ADJUSTED = 'ADJUSTED',
     XMALL_PURCHASE = 'XMALL_PURCHASE',
+    LIQUIDATION = 'LIQUIDATION',
+}
+
+export enum PointReason {
+    BEST_EMPLOYEE = 'BEST_EMPLOYEE',
+    BEST_TEAM = 'BEST_TEAM',
+    AIP_PLUS = 'AIP_PLUS',
+    CIP = 'CIP',
+    PRESENCE_MONTH = 'PRESENCE_MONTH',
+    PLANT_MANAGER_MOTIVATION = 'PLANT_MANAGER_MOTIVATION',
+    UNPLANNED_ABSENCE = 'UNPLANNED_ABSENCE',
+    DELAY = 'DELAY',
+    DISCIPLINARY_SANCTION = 'DISCIPLINARY_SANCTION',
+    XMALL_PURCHASE = 'XMALL_PURCHASE',
+    MANUAL_ADJUSTMENT = 'MANUAL_ADJUSTMENT',
+    ABSENCE_PENALTY = 'ABSENCE_PENALTY',
+    LIQUIDATION = 'LIQUIDATION',
 }
 
 @Entity('point_transactions')
@@ -39,8 +56,18 @@ export class PointTransaction {
     })
     type: TransactionType;
 
-    @Column()
+    @Column({
+        type: 'varchar',
+        length: 50,
+        nullable: true,
+    })
+    reason: PointReason;
+
+    @Column({ type: 'decimal', precision: 10, scale: 2 })
     value: number;
+
+    @Column({ name: 'liquidation_id', nullable: true })
+    liquidationId: number;
 
     @Column({ type: 'text' })
     description: string;

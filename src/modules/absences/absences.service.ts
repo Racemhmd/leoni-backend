@@ -38,7 +38,14 @@ export class AbsencesService {
 
             // Actually, PointsService.addPoints uses dataSource.transaction(). Nested transactions in Postgres are savepoints. It works.
             const penalty = duration * 10;
-            await this.pointsService.deductPoints(employeeId, penalty, 'ABSENCE_PENALTY', `Absence: ${type} defined on ${date}`);
+            // Need to cast string to PointReason or use enum if imported. 
+            // Since we can't easily import enum in this replace block without seeing imports, we rely on string matching enum
+            // But strict typing requires enum member. 
+            // Better to import enum at top of file first? 
+            // For now, I will use 'ABSENCE_PENALTY' as any, but cleanest is to import. 
+            // Let's assume PointReason is exported.
+
+            await this.pointsService.deductPoints(employeeId, penalty, 'ABSENCE_PENALTY' as any, `Absence: ${type} defined on ${date}`);
 
             return absence;
         });

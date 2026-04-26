@@ -3,6 +3,7 @@ import { UsersService } from './users.service';
 import { PointsService } from '../points/points.service';
 import { AuditService } from '../audit/audit.service';
 import { User } from '../../database/entities/user.entity';
+import { PointReason } from '../../database/entities/point-transaction.entity';
 import * as bcrypt from 'bcryptjs';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -157,11 +158,13 @@ export class UsersController {
 
         const oldBalance = user.pointsBalance;
 
+        const reasonObj = body.type as PointReason || PointReason.MANUAL_ADJUSTMENT;
+
         if (body.points > 0) {
-            await this.pointsService.addPoints(user.id, body.points, body.type || 'ADJUSTED', body.description || 'Manual Adjustment');
+            await this.pointsService.addPoints(user.id, body.points, reasonObj, body.description || 'Manual Adjustment');
         } else {
             // PointsService.deductPoints already checks for insufficient balance (< 0)
-            await this.pointsService.deductPoints(user.id, Math.abs(body.points), body.type || 'ADJUSTED', body.description || 'Manual Adjustment');
+            await this.pointsService.deductPoints(user.id, Math.abs(body.points), reasonObj, body.description || 'Manual Adjustment');
         }
 
         // Refetch to get updated balance
