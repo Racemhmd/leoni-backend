@@ -73,4 +73,12 @@ export class SanctionsController {
   async getEmployeeHistory(@Param('matricule') matricule: string) {
     return this.sanctionsService.getEmployeeSanctionHistory(matricule);
   }
+
+  @Get('kpi-dashboard')
+  @Roles(UserRole.HR_ADMIN, UserRole.SUPERVISOR)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({ summary: 'Unified KPI dashboard data (Group or Individual)' })
+  async getKpiDashboard(@Query('period') period?: string, @Query('matricule') matricule?: string) {
+    return this.sanctionsService.getKpiDashboardData(period || '6', matricule);
+  }
 }

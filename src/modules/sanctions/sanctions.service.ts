@@ -277,4 +277,82 @@ export class SanctionsService {
       description: null
     }));
   }
+
+  async getKpiDashboardData(period: string, matricule?: string) {
+    let monthsToSubtract = 6;
+    if (period && period.endsWith('months')) {
+      const num = parseInt(period.replace('months', ''), 10);
+      if (!isNaN(num)) monthsToSubtract = num;
+    } else if (period === '12' || period === '6' || period === '3') {
+        monthsToSubtract = parseInt(period, 10);
+    }
+
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - monthsToSubtract + 1);
+    startDate.setDate(1);
+
+    const qb = this.employeeSanctionRepository.createQueryBuilder('s')
+      .select("TO_CHAR(s.recordDate, 'YYYY-MM')", 'month')
+      .where('s.recordDate >= :startDate', { startDate });
+
+    if (matricule) {
+      qb.andWhere('s.matricule = :matricule', { matricule });
+    }
+
+    qb.addSelect('SUM(s.renvoiCount)', 'renvoi')
+      .addSelect('SUM(s.renvoiProlongeCount)', 'renvoi_prolonge')
+      .addSelect('SUM(s.sansQuestionnaireCount)', 'sans_questionnaire')
+      .addSelect('SUM(s.absenceContinueCount)', 'absence_continue')
+      .addSelect('SUM(s.maladieDays)', 'maladie')
+      .groupBy("TO_CHAR(s.recordDate, 'YYYY-MM')")
+      .orderBy("TO_CHAR(s.recordDate, 'YYYY-MM')", 'ASC');
+    
+    const rawResults = await qb.getRawMany();
+    const results = rawResults.map(r => ({
+      month: r.month,
+      renvoi: Number(r.renvoi || 0),
+      renvoi_prolonge: Number(r.renvoi_prolonge || 0),
+      delays: Number(r.sans_questionnaire || 0),
+      absences: Number(r.absence_continue || 0),
+      sickDays: Number(r.maladie || 0),
+    }));
+
+    const filledResults = [];
+    const currentDate = new Date(startDate);
+    
+    const totals = {
+        sanctions: 0,
+        absences: 0,
+        delays: 0,
+        sickDays: 0,
+        dismissals: 0,
+        extendedDismissals: 0
+    };
+
+    for (let i = 0; i < monthsToSubtract; i++) {
+      const year = currentDate.getFullYear();
+      const monthNum = currentDate.getMonth() + 1;
+      const monthStr = `${year}-${monthNum.toString().padStart(2, '0')}`;
+      
+      const found = results.find(r => r.month === monthStr);
+      if (found) {
+        filledResults.push(found);
+        totals.dismissals += found.renvoi;
+        totals.extendedDismissals += found.renvoi_prolonge;
+        totals.delays += found.delays;
+        totals.absences += found.absences;
+        totals.sickDays += found.sickDays;
+      } else {
+        filledResults.push({ month: monthStr, renvoi: 0, renvoi_prolonge: 0, delays: 0, absences: 0, sickDays: 0 });
+      }
+      currentDate.setMonth(currentDate.getMonth() + 1);
+    }
+    
+    totals.sanctions = totals.dismissals + totals.extendedDismissals + totals.delays + totals.absences + totals.sickDays;
+
+    return {
+        totals,
+        chartData: filledResults
+    };
+  }
 }
