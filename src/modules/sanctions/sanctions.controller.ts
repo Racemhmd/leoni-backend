@@ -57,4 +57,12 @@ export class SanctionsController {
   async getStats(@Query('period') period?: string, @Query('type') type?: string) {
     return this.sanctionsService.getSanctionStats(period || '6months', type);
   }
+
+  @Get('details')
+  @Roles(UserRole.HR_ADMIN, UserRole.SUPERVISOR)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({ summary: 'Get sanction details per employee' })
+  async getDetails(@Query('period') period?: string, @Query('type') type?: string) {
+    return this.sanctionsService.getSanctionDetails(period || '6months', type);
+  }
 }

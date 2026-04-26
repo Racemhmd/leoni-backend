@@ -137,12 +137,14 @@ export class SanctionsService {
     }
 
     const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - monthsToSubtract);
+    startDate.setMonth(startDate.getMonth() - monthsToSubtract + 1);
     startDate.setDate(1);
 
     const qb = this.employeeSanctionRepository.createQueryBuilder('s')
       .select("TO_CHAR(s.recordDate, 'YYYY-MM')", 'month')
       .where('s.recordDate >= :startDate', { startDate });
+
+    let results = [];
 
     if (type) {
       let columnName = '';
@@ -158,10 +160,10 @@ export class SanctionsService {
       qb.groupBy("TO_CHAR(s.recordDate, 'YYYY-MM')");
       qb.orderBy("TO_CHAR(s.recordDate, 'YYYY-MM')", 'ASC');
       
-      const results = await qb.getRawMany();
-      return results.map(r => ({
+      const rawResults = await qb.getRawMany();
+      results = rawResults.map(r => ({
         month: r.month,
-        value: Number(r.value)
+        value: Number(r.value || 0)
       }));
     } else {
       qb.addSelect('SUM(s.renvoiCount)', 'renvoi')
@@ -172,15 +174,88 @@ export class SanctionsService {
         .groupBy("TO_CHAR(s.recordDate, 'YYYY-MM')")
         .orderBy("TO_CHAR(s.recordDate, 'YYYY-MM')", 'ASC');
       
-      const results = await qb.getRawMany();
-      return results.map(r => ({
+      const rawResults = await qb.getRawMany();
+      results = rawResults.map(r => ({
         month: r.month,
-        renvoi: Number(r.renvoi),
-        renvoi_prolonge: Number(r.renvoi_prolonge),
-        sans_questionnaire: Number(r.sans_questionnaire),
-        absence_continue: Number(r.absence_continue),
-        maladie: Number(r.maladie),
+        renvoi: Number(r.renvoi || 0),
+        renvoi_prolonge: Number(r.renvoi_prolonge || 0),
+        sans_questionnaire: Number(r.sans_questionnaire || 0),
+        absence_continue: Number(r.absence_continue || 0),
+        maladie: Number(r.maladie || 0),
       }));
     }
+
+    const filledResults = [];
+    const currentDate = new Date(startDate);
+    
+    for (let i = 0; i < monthsToSubtract; i++) {
+      const year = currentDate.getFullYear();
+      const monthNum = currentDate.getMonth() + 1;
+      const monthStr = `${year}-${monthNum.toString().padStart(2, '0')}`;
+      
+      const found = results.find(r => r.month === monthStr);
+      if (found) {
+        filledResults.push(found);
+      } else {
+        if (type) {
+          filledResults.push({ month: monthStr, value: 0 });
+        } else {
+          filledResults.push({ month: monthStr, renvoi: 0, renvoi_prolonge: 0, sans_questionnaire: 0, absence_continue: 0, maladie: 0 });
+        }
+      }
+      currentDate.setMonth(currentDate.getMonth() + 1);
+    }
+    
+    return filledResults;
+  }
+
+  async getSanctionDetails(period: string, type?: string) {
+    let monthsToSubtract = 6;
+    if (period && period.endsWith('months')) {
+      const num = parseInt(period.replace('months', ''), 10);
+      if (!isNaN(num)) monthsToSubtract = num;
+    } else if (period && period.endsWith('month')) {
+      monthsToSubtract = 1;
+    } else if (period === 'yearly' || period === 'year') {
+      monthsToSubtract = 12;
+    }
+
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - monthsToSubtract + 1);
+    startDate.setDate(1);
+
+    const qb = this.employeeSanctionRepository.createQueryBuilder('s')
+      .innerJoin(User, 'u', 'u.id = s.employeeId')
+      .select('u.matricule', 'matricule')
+      .addSelect('u.full_name', 'name')
+      .where('s.recordDate >= :startDate', { startDate });
+
+    if (type) {
+      let columnName = '';
+      switch (type) {
+        case 'renvoi': columnName = 'renvoiCount'; break;
+        case 'renvoi_prolonge': columnName = 'renvoiProlongeCount'; break;
+        case 'sans_questionnaire': columnName = 'sansQuestionnaireCount'; break;
+        case 'absence_continue': columnName = 'absenceContinueCount'; break;
+        case 'maladie': columnName = 'maladieDays'; break;
+        default: throw new BadRequestException(`Unknown sanction type: ${type}`);
+      }
+      qb.addSelect(`SUM(s.${columnName})`, 'value');
+      qb.groupBy('u.matricule, u.full_name');
+      qb.having(`SUM(s.${columnName}) > 0`);
+      qb.orderBy('value', 'DESC');
+    } else {
+      qb.addSelect('SUM(s.renvoiCount + s.renvoiProlongeCount + s.sansQuestionnaireCount + s.absenceContinueCount + s.maladieDays)', 'value');
+      qb.groupBy('u.matricule, u.full_name');
+      qb.having('SUM(s.renvoiCount + s.renvoiProlongeCount + s.sansQuestionnaireCount + s.absenceContinueCount + s.maladieDays) > 0');
+      qb.orderBy('value', 'DESC');
+    }
+
+    const results = await qb.getRawMany();
+    return results.map(r => ({
+      matricule: r.matricule,
+      name: r.name,
+      value: Number(r.value || 0)
+    }));
   }
 }
