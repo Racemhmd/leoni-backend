@@ -258,4 +258,23 @@ export class SanctionsService {
       value: Number(r.value || 0)
     }));
   }
+
+  async getEmployeeSanctionHistory(matricule: string) {
+    const qb = this.employeeSanctionRepository.createQueryBuilder('s')
+      .where('s.matricule = :matricule', { matricule })
+      .orderBy('s.recordDate', 'DESC');
+    
+    const results = await qb.getMany();
+    
+    return results.map(r => ({
+      id: r.id,
+      recordDate: r.recordDate,
+      renvoi: r.renvoiCount || 0,
+      renvoi_prolonge: r.renvoiProlongeCount || 0,
+      sans_questionnaire: r.sansQuestionnaireCount || 0,
+      absence_continue: r.absenceContinueCount || 0,
+      maladie: r.maladieDays || 0,
+      description: null
+    }));
+  }
 }

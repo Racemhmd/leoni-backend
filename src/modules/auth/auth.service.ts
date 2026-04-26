@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -78,7 +78,25 @@ export class AuthService {
         };
     }
 
-    async changePassword(userId: number, newPassword: string): Promise<void> {
+    async changePassword(userId: number, oldPassword: string, newPassword: string): Promise<void> {
+        const user = await this.usersService.findByIdWithPassword(userId);
+        if (!user) throw new UnauthorizedException('User not found');
+
+        if (!(await bcrypt.compare(oldPassword, user.password))) {
+            throw new UnauthorizedException('Incorrect old password');
+        }
+
+        const hasLetters = /[a-zA-Z]/.test(newPassword);
+        const hasNumbers = /\d/.test(newPassword);
+
+        if (newPassword.length < 8 || !hasLetters || !hasNumbers) {
+            throw new BadRequestException('Password must be at least 8 characters long and contain both letters and numbers');
+        }
+
+        if (await bcrypt.compare(newPassword, user.password)) {
+            throw new BadRequestException('New password must be different from the old password');
+        }
+
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         await this.usersService.update(userId, {
             password: hashedPassword,

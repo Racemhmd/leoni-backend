@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Query, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Query, Param, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SanctionsService } from './sanctions.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -64,5 +64,13 @@ export class SanctionsController {
   @ApiOperation({ summary: 'Get sanction details per employee' })
   async getDetails(@Query('period') period?: string, @Query('type') type?: string) {
     return this.sanctionsService.getSanctionDetails(period || '6months', type);
+  }
+
+  @Get('employee/:matricule')
+  @Roles(UserRole.HR_ADMIN, UserRole.SUPERVISOR)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({ summary: 'Get full sanction history for a specific employee' })
+  async getEmployeeHistory(@Param('matricule') matricule: string) {
+    return this.sanctionsService.getEmployeeSanctionHistory(matricule);
   }
 }

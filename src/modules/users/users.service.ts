@@ -149,6 +149,13 @@ export class UsersService implements OnApplicationBootstrap {
         });
     }
 
+    async findByIdWithPassword(id: number): Promise<User | null> {
+        return this.usersRepository.createQueryBuilder('user')
+            .addSelect('user.password')
+            .where('user.id = :id', { id })
+            .getOne();
+    }
+
     async create(userData: Partial<User>): Promise<User> {
         const newUser = this.usersRepository.create(userData);
         return this.usersRepository.save(newUser);

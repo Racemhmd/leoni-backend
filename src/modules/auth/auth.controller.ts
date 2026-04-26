@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Get, Request, UnauthorizedException, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Get, Request, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LoginDto } from './dto/login.dto';
@@ -62,10 +62,10 @@ export class AuthController {
     @UseGuards(JwtAuthGuard)
     @Post('change-password')
     async changePassword(@Request() req: any, @Body() body: any) {
-        if (!body.newPassword) {
-            throw new Error('New password is required');
+        if (!body.oldPassword || !body.newPassword) {
+            throw new BadRequestException('Old password and new password are required');
         }
-        await this.authService.changePassword(req.user.id, body.newPassword);
+        await this.authService.changePassword(req.user.id, body.oldPassword, body.newPassword);
         return { message: 'Password changed successfully' };
     }
 }
