@@ -78,7 +78,23 @@ export class SanctionsController {
   @Roles(UserRole.HR_ADMIN, UserRole.SUPERVISOR)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Unified KPI dashboard data (Group or Individual)' })
-  async getKpiDashboard(@Query('period') period?: string, @Query('matricule') matricule?: string) {
-    return this.sanctionsService.getKpiDashboardData(period || '6', matricule);
+  async getKpiDashboard(@Query('period') period?: string, @Query('matricule') matricule?: string, @Query('group') group?: string) {
+    return this.sanctionsService.getKpiDashboardData(period || '6', matricule, group);
+  }
+
+  @Get('kpi/group')
+  @Roles(UserRole.HR_ADMIN, UserRole.SUPERVISOR)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({ summary: 'Get KPIs aggregated by production group' })
+  async getKpiByGroup(@Query('period') period?: string, @Query('group') group?: string) {
+    return this.sanctionsService.getKpiByGroupData(period || '6', group);
+  }
+
+  @Get('kpi/employee/:matricule')
+  @Roles(UserRole.HR_ADMIN, UserRole.SUPERVISOR)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({ summary: 'Get KPIs aggregated for a specific employee' })
+  async getKpiByEmployee(@Param('matricule') matricule: string, @Query('period') period?: string) {
+    return this.sanctionsService.getKpiByEmployee(matricule, period || '6');
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EmployeeSanction } from '../../database/entities/sanction-history.entity';
@@ -278,7 +278,7 @@ export class SanctionsService {
     }));
   }
 
-  async getKpiDashboardData(period: string, matricule?: string) {
+  async getKpiDashboardData(period: string, matricule?: string, group?: string) {
     let monthsToSubtract = 6;
     if (period && period.endsWith('months')) {
       const num = parseInt(period.replace('months', ''), 10);
@@ -294,6 +294,11 @@ export class SanctionsService {
     const qb = this.employeeSanctionRepository.createQueryBuilder('s')
       .select("TO_CHAR(s.recordDate, 'YYYY-MM')", 'month')
       .where('s.recordDate >= :startDate', { startDate });
+
+    if (group) {
+      qb.innerJoin('s.employee', 'user')
+        .andWhere('user.group = :group', { group });
+    }
 
     if (matricule) {
       qb.andWhere('s.matricule = :matricule', { matricule });
@@ -353,6 +358,70 @@ export class SanctionsService {
     return {
         totals,
         chartData: filledResults
+    };
+  }
+
+  async getKpiByGroupData(period: string, groupName?: string) {
+    let monthsToSubtract = 6;
+    if (period === '12' || period === '6' || period === '3') {
+        monthsToSubtract = parseInt(period, 10);
+    }
+
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - monthsToSubtract + 1);
+    startDate.setDate(1);
+
+    const qb = this.employeeSanctionRepository.createQueryBuilder('s')
+      .innerJoin('s.employee', 'user')
+      .select('user.group', 'groupName')
+      .where('s.recordDate >= :startDate', { startDate });
+
+    if (groupName) {
+      qb.andWhere('user.group = :groupName', { groupName });
+    }
+
+    qb.addSelect('SUM(s.renvoiCount)', 'renvoi')
+      .addSelect('SUM(s.renvoiProlongeCount)', 'renvoi_prolonge')
+      .addSelect('SUM(s.sansQuestionnaireCount)', 'delays')
+      .addSelect('SUM(s.absenceContinueCount)', 'absences')
+      .addSelect('SUM(s.maladieDays)', 'sickDays')
+      .groupBy('user.group')
+      .orderBy('user.group', 'ASC');
+
+    const rawResults = await qb.getRawMany();
+
+    return rawResults.map(r => ({
+      group: r.groupName || 'UNASSIGNED',
+      sanctions: Number(r.renvoi || 0) + Number(r.renvoi_prolonge || 0) + Number(r.delays || 0) + Number(r.absences || 0) + Number(r.sickDays || 0),
+      absences: Number(r.absences || 0),
+      delays: Number(r.delays || 0),
+      sickDays: Number(r.sickDays || 0)
+    }));
+  }
+
+  async getKpiByEmployee(matricule: string, period: string) {
+    const user = await this.userRepository.findOne({ where: { matricule }});
+    if (!user) {
+        throw new NotFoundException(`Employee with matricule ${matricule} not found`);
+    }
+
+    const kpiData = await this.getKpiDashboardData(period, matricule);
+
+    return {
+        employee: {
+            matricule: user.matricule,
+            name: user.fullName,
+            group: user.group || 'UNASSIGNED'
+        },
+        totals: {
+            sanctions: kpiData.totals.sanctions,
+            absences: kpiData.totals.absences,
+            delays: kpiData.totals.delays,
+            sickDays: kpiData.totals.sickDays,
+            dismissals: kpiData.totals.dismissals,
+            extendedDismissals: kpiData.totals.extendedDismissals
+        },
+        timeBasedData: kpiData.chartData
     };
   }
 }

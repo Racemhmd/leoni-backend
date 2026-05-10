@@ -14,6 +14,7 @@ import { RefreshToken } from './database/entities/refresh-token.entity';
 import { AuditLog } from './database/entities/audit-log.entity';
 import { Liquidation } from './database/entities/liquidation.entity';
 import { EmployeeSanction } from './database/entities/sanction-history.entity';
+import { PasswordResetToken } from './database/entities/password-reset-token.entity';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { AbsencesModule } from './modules/absences/absences.module';
@@ -24,6 +25,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { LiquidationModule } from './modules/liquidation/liquidation.module';
 import { SanctionsModule } from './modules/sanctions/sanctions.module';
+import { EmailModule } from './modules/email/email.module';
 
 @Module({
   imports: [
@@ -57,6 +59,7 @@ import { SanctionsModule } from './modules/sanctions/sanctions.module';
           AuditLog,
           Liquidation,
           EmployeeSanction,
+          PasswordResetToken,
         ],
         synchronize: (() => {
           const sync = String(configService.get<string>('DB_SYNCHRONIZE')).trim().toLowerCase() === 'true';
@@ -76,6 +79,7 @@ import { SanctionsModule } from './modules/sanctions/sanctions.module';
     AuditModule,
     LiquidationModule,
     SanctionsModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [AppService],

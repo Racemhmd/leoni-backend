@@ -1,4 +1,4 @@
-import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../database/entities/user.entity';
@@ -157,6 +157,10 @@ export class UsersService implements OnApplicationBootstrap {
     }
 
     async create(userData: Partial<User>): Promise<User> {
+        // Enforce group logic: EMPLOYEE must have a group
+        if (userData.role && userData.role.name === 'EMPLOYEE' && (!userData.group || userData.group.trim() === '')) {
+            throw new BadRequestException('An EMPLOYEE must belong to a production group (e.g. G-855).');
+        }
         const newUser = this.usersRepository.create(userData);
         return this.usersRepository.save(newUser);
     }
@@ -179,10 +183,19 @@ export class UsersService implements OnApplicationBootstrap {
 
         for (const row of data as any[]) {
             try {
-                // Expected columns: matricule, full_name, department, plant, role
-                const { matricule, full_name, department, plant, role } = row;
+                // Expected columns: matricule, full_name (or firstName/lastName), department, plant, role, group, personalEmail
+                const { matricule, department, plant, role, group, personalEmail } = row;
+                
+                // Handle different naming conventions for names
+                const firstName = row['firstName'] || row['first_name'] || row['prenom'] || '';
+                const lastName = row['lastName'] || row['last_name'] || row['nom'] || '';
+                let fullNameStr = row['full_name'] || row['fullName'] || '';
+                
+                if (!fullNameStr && (firstName || lastName)) {
+                    fullNameStr = `${firstName} ${lastName}`.trim();
+                }
 
-                if (!matricule || !full_name) {
+                if (!matricule || !fullNameStr) {
                     stats.failed++;
                     stats.errors.push(`Row missing matricule or full_name: ${JSON.stringify(row)}`);
                     continue;
@@ -223,11 +236,21 @@ export class UsersService implements OnApplicationBootstrap {
 
                 const hashedPassword = await bcrypt.hash('password123', 10);
 
+                // Enforce group for EMPLOYEE
+                const groupStr = group ? String(group).trim() : undefined;
+                if (roleName === 'EMPLOYEE' && (!groupStr || groupStr === '')) {
+                    stats.failed++;
+                    stats.errors.push(`Row missing mandatory group for EMPLOYEE: ${matriculeStr}`);
+                    continue;
+                }
+
                 const userData: Partial<User> = {
                     matricule: matriculeStr,
-                    fullName: full_name,
+                    fullName: fullNameStr,
                     department: department ? String(department).trim() : undefined,
                     plant: plant ? String(plant).trim() : undefined,
+                    personalEmail: personalEmail ? String(personalEmail).trim() : undefined,
+                    group: groupStr,
                     role: userRole || undefined,
                     pointsBalance: 0,
                     password: hashedPassword,

@@ -10,3 +10,4 @@ export { Notification, NotificationType } from './notification.entity';
 export { RefreshToken } from './refresh-token.entity';
 export { AuditLog } from './audit-log.entity';
 export { EmployeeSanction } from './sanction-history.entity';
+export { PasswordResetToken } from './password-reset-token.entity';

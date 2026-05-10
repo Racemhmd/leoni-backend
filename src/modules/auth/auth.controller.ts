@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Get, Request, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Get, Request, UnauthorizedException, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LoginDto } from './dto/login.dto';
@@ -43,6 +43,7 @@ export class AuthController {
             matricule: user.matricule,
             fullName: user.fullName,
             role: role,
+            personalEmail: user.personalEmail,
         };
 
         if (role === 'EMPLOYEE') {
@@ -67,5 +68,68 @@ export class AuthController {
         }
         await this.authService.changePassword(req.user.id, body.oldPassword, body.newPassword);
         return { message: 'Password changed successfully' };
+    }
+
+    @Post('forgot-password')
+    async forgotPassword(@Body() body: any) {
+        try {
+            console.log(`[Auth Controller] Forgot password request received for matricule: ${body.matricule}`);
+            if (!body.matricule || !body.recoveryEmail) {
+                console.warn('[Auth Controller] Missing matricule or recoveryEmail in request');
+                throw new BadRequestException('Matricule and recoveryEmail are required');
+            }
+            
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(body.recoveryEmail)) {
+                console.warn('[Auth Controller] Invalid email format provided');
+                throw new BadRequestException('Invalid email format');
+            }
+            
+            await this.authService.forgotPassword(body.matricule, body.recoveryEmail);
+            
+            console.log('[Auth Controller] Returning generic success response for forgot password');
+            // Always return success even if user not found, for security
+            return { message: 'If the information is correct, a reset code has been sent.' };
+        } catch (error) {
+            if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+                throw error;
+            }
+            
+            console.error('[Forgot Password Error]:', error);
+            
+            // Ensure JSON response for server errors
+            throw new InternalServerErrorException({
+                statusCode: 500,
+                message: 'An internal server error occurred',
+                error: error.message || 'Unknown error'
+            });
+        }
+    }
+
+    @Post('reset-password')
+    async resetPassword(@Body() body: any) {
+        try {
+            if (!body.matricule || !body.code || !body.newPassword || !body.confirmPassword) {
+                throw new BadRequestException('All fields are required');
+            }
+
+            if (body.newPassword !== body.confirmPassword) {
+                throw new BadRequestException('Passwords do not match');
+            }
+
+            await this.authService.resetPassword(body.matricule, body.code, body.newPassword);
+            
+            return { message: 'Password successfully reset' };
+        } catch (error) {
+            if (error instanceof BadRequestException) {
+                throw error;
+            }
+            console.error('[Reset Password Error]:', error);
+            throw new InternalServerErrorException({
+                statusCode: 500,
+                message: 'An internal server error occurred',
+                error: error.message || 'Unknown error'
+            });
+        }
     }
 }

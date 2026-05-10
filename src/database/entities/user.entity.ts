@@ -25,6 +25,9 @@ export class User {
   @Column({ nullable: true, length: 255 })
   email: string;
 
+  @Column({ name: 'personal_email', nullable: true, length: 255 })
+  personalEmail: string;
+
   @Column({ nullable: true, length: 100 })
   department: string;
 
