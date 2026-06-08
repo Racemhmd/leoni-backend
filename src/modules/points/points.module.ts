@@ -7,12 +7,14 @@ import { User } from '../../database/entities/user.entity';
 import { Liquidation } from '../../database/entities/liquidation.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuditModule } from '../audit/audit.module';
+import { RewardsModule } from '../rewards/rewards.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([PointTransaction, User, Liquidation]),
     NotificationsModule,
     AuditModule,
+    RewardsModule,
   ],
   controllers: [PointsController],
   providers: [PointsService],

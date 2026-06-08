@@ -84,6 +84,35 @@ export class User {
   @Column({ name: 'password_updated_at', type: 'timestamp', nullable: true })
   passwordUpdatedAt: Date;
 
+  @Column({ name: 'avatar_url', nullable: true, length: 512 })
+  avatarUrl: string;
+
+  @Column({ name: 'fcm_token', nullable: true, length: 512 })
+  fcmToken: string;
+
+  @Column({ name: 'phone_number', nullable: true, length: 20 })
+  phoneNumber: string;
+
+  @Column({ name: 'notif_push_points', default: true })
+  notifPushPoints: boolean;
+
+  @Column({ name: 'notif_push_liquidation', default: true })
+  notifPushLiquidation: boolean;
+
+  @Column({ name: 'notif_sms_points', default: false })
+  notifSmsPoints: boolean;
+
+  @Column({ name: 'notif_sms_liquidation', default: false })
+  notifSmsLiquidation: boolean;
+
+  /**
+   * Quand true, l'employé demande à conserver ses points lors de la liquidation
+   * trimestrielle au lieu de les convertir en DT.
+   * Modifiable via PATCH /users/me/liquidation-preference.
+   */
+  @Column({ name: 'keep_points_at_liquidation', default: false })
+  keepPointsAtLiquidation: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

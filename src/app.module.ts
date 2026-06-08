@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { User } from './database/entities/user.entity';
@@ -26,12 +27,15 @@ import { AuditModule } from './modules/audit/audit.module';
 import { LiquidationModule } from './modules/liquidation/liquidation.module';
 import { SanctionsModule } from './modules/sanctions/sanctions.module';
 import { EmailModule } from './modules/email/email.module';
+import { RewardsModule } from './modules/rewards/rewards.module';
+import { Reward } from './database/entities/reward.entity';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -60,6 +64,7 @@ import { EmailModule } from './modules/email/email.module';
           Liquidation,
           EmployeeSanction,
           PasswordResetToken,
+          Reward,
         ],
         synchronize: (() => {
           const sync = String(configService.get<string>('DB_SYNCHRONIZE')).trim().toLowerCase() === 'true';
@@ -80,6 +85,7 @@ import { EmailModule } from './modules/email/email.module';
     LiquidationModule,
     SanctionsModule,
     EmailModule,
+    RewardsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

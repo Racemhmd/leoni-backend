@@ -47,7 +47,9 @@ export class UsersService implements OnApplicationBootstrap {
         if (!adminExists) {
             console.log('Seeding Initial Admin User...');
             const hrRole = await this.roleRepository.findOne({ where: { name: 'HR_ADMIN' } });
-            const hashedPassword = await bcrypt.hash('password123', 10);
+            // SEED_ADMIN_PASSWORD en env (ex: openssl rand -base64 16) ; fallback sécurisé
+            const seedAdminPwd = process.env.SEED_ADMIN_PASSWORD || 'ChangeMe@FirstLogin!';
+            const hashedPassword = await bcrypt.hash(seedAdminPwd, 12);
 
             const adminUser = this.usersRepository.create({
                 matricule: adminMatricule,
@@ -71,7 +73,8 @@ export class UsersService implements OnApplicationBootstrap {
         if (!employeeExists) {
             console.log('Seeding Test Employee User (Rahma)...');
             const employeeRole = await this.roleRepository.findOne({ where: { name: 'EMPLOYEE' } });
-            const hashedPassword = await bcrypt.hash('password123', 10);
+            const seedEmpPwd = process.env.SEED_EMPLOYEE_PASSWORD || 'ChangeMe@FirstLogin!';
+            const hashedPassword = await bcrypt.hash(seedEmpPwd, 12);
 
             const employeeUser = this.usersRepository.create({
                 matricule: employeeMatricule,
@@ -109,12 +112,16 @@ export class UsersService implements OnApplicationBootstrap {
             { matricule: '10110172', fullName: 'Abdelli Chedlia', role: 'EMPLOYEE' },
         ];
 
+        // Mot de passe unique par défaut pour tous les users bulk (forcé à changer au 1er login)
+        const seedBulkPwd = process.env.SEED_BULK_PASSWORD || 'ChangeMe@FirstLogin!';
+        const bulkHashedPassword = await bcrypt.hash(seedBulkPwd, 12);
+
         console.log('Seeding Bulk Users...');
         for (const user of bulkUsers) {
             const exists = await this.usersRepository.findOne({ where: { matricule: user.matricule } });
             if (!exists) {
                 const role = await this.roleRepository.findOne({ where: { name: user.role } });
-                const hashedPassword = await bcrypt.hash('password123', 10);
+                const hashedPassword = bulkHashedPassword;
 
                 const newUser = this.usersRepository.create({
                     matricule: user.matricule,

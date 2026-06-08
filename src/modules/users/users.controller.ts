@@ -1,4 +1,7 @@
-import { Controller, Post, Body, Get, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException, Delete, Param, Patch, NotFoundException, Ip, Query, ForbiddenException } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException, Delete, Param, Patch, NotFoundException, Ip, Query, ForbiddenException, Put } from '@nestjs/common';
+import * as path from 'path';
+import * as fs from 'fs';
+import { diskStorage } from 'multer';
 import { UsersService } from './users.service';
 import { PointsService } from '../points/points.service';
 import { AuditService } from '../audit/audit.service';
@@ -255,5 +258,119 @@ export class UsersController {
         );
 
         return { message: 'Recovery email updated successfully' };
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Patch('me/fcm-token')
+    async updateFcmToken(@Body() body: { fcmToken: string }, @Request() req: any) {
+        if (!body.fcmToken) throw new BadRequestException('FCM token required');
+        await this.usersService.update(req.user.id, { fcmToken: body.fcmToken });
+        return { message: 'FCM token updated' };
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Patch('me/phone')
+    async updatePhone(@Body() body: { phoneNumber: string }, @Request() req: any) {
+        if (!body.phoneNumber) throw new BadRequestException('Phone number required');
+        await this.usersService.update(req.user.id, { phoneNumber: body.phoneNumber });
+        return { message: 'Phone number updated' };
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Put('me/photo')
+    @UseInterceptors(
+        FileInterceptor('photo', {
+            storage: diskStorage({
+                destination: (_req, _file, cb) => {
+                    const dir = path.join(process.cwd(), 'uploads', 'avatars');
+                    fs.mkdirSync(dir, { recursive: true });
+                    cb(null, dir);
+                },
+                filename: (_req, file, cb) => {
+                    const ext = path.extname(file.originalname) || '.jpg';
+                    cb(null, `avatar_${Date.now()}${ext}`);
+                },
+            }),
+            limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB
+            fileFilter: (_req, file, cb) => {
+                const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+                if (!allowed.includes(file.mimetype)) {
+                    return cb(new BadRequestException('Only JPEG/PNG/WebP images allowed'), false);
+                }
+                cb(null, true);
+            },
+        }),
+    )
+    async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Request() req: any) {
+        if (!file) throw new BadRequestException('Photo file required');
+        const avatarUrl = `/uploads/avatars/${file.filename}`;
+
+        // Delete old avatar if it exists
+        const user = await this.usersService.findById(req.user.id);
+        if (user?.avatarUrl) {
+            const oldPath = path.join(process.cwd(), user.avatarUrl.replace(/^\//, ''));
+            fs.unlink(oldPath, () => {/* best-effort */});
+        }
+
+        await this.usersService.update(req.user.id, { avatarUrl });
+        return { avatarUrl };
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Delete('me/photo')
+    async deleteAvatar(@Request() req: any) {
+        const user = await this.usersService.findById(req.user.id);
+        if (user?.avatarUrl) {
+            const oldPath = path.join(process.cwd(), user.avatarUrl.replace(/^\//, ''));
+            fs.unlink(oldPath, () => {/* best-effort */});
+        }
+        await this.usersService.update(req.user.id, { avatarUrl: null as any });
+        return { message: 'Photo supprimée' };
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Patch('me/notification-prefs')
+    async updateNotifPrefs(
+        @Body() body: {
+            notifPushPoints?: boolean;
+            notifPushLiquidation?: boolean;
+            notifSmsPoints?: boolean;
+            notifSmsLiquidation?: boolean;
+        },
+        @Request() req: any,
+    ) {
+        const allowed = ['notifPushPoints', 'notifPushLiquidation', 'notifSmsPoints', 'notifSmsLiquidation'];
+        const update: Record<string, boolean> = {};
+        for (const key of allowed) {
+            const val = (body as Record<string, boolean | undefined>)[key];
+            if (val !== undefined) update[key] = val;
+        }
+        await this.usersService.update(req.user.id, update);
+        return { message: 'Notification preferences updated' };
+    }
+
+    /**
+     * PATCH /users/me/liquidation-preference
+     * Permet à un employé de choisir de conserver ses points lors de la liquidation
+     * au lieu de les convertir en DT.
+     */
+    @UseGuards(JwtAuthGuard)
+    @Patch('me/liquidation-preference')
+    async updateLiquidationPreference(
+        @Body() body: { keepPointsAtLiquidation: boolean },
+        @Request() req: any,
+    ) {
+        if (typeof body.keepPointsAtLiquidation !== 'boolean') {
+            throw new BadRequestException('keepPointsAtLiquidation doit être un booléen');
+        }
+        await this.usersService.update(req.user.id, {
+            keepPointsAtLiquidation: body.keepPointsAtLiquidation,
+        });
+        return {
+            message: body.keepPointsAtLiquidation
+                ? 'Vos points seront conservés lors de la prochaine liquidation.'
+                : 'Vos points seront convertis en DT lors de la prochaine liquidation.',
+            keepPointsAtLiquidation: body.keepPointsAtLiquidation,
+        };
     }
 }

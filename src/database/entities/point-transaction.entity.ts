@@ -11,15 +11,20 @@ export enum TransactionType {
 }
 
 export enum PointReason {
+    // --- Gains ---
     BEST_EMPLOYEE = 'BEST_EMPLOYEE',
     BEST_TEAM = 'BEST_TEAM',
     AIP_PLUS = 'AIP_PLUS',
     CIP = 'CIP',
     PRESENCE_MONTH = 'PRESENCE_MONTH',
     PLANT_MANAGER_MOTIVATION = 'PLANT_MANAGER_MOTIVATION',
-    UNPLANNED_ABSENCE = 'UNPLANNED_ABSENCE',
-    DELAY = 'DELAY',
-    DISCIPLINARY_SANCTION = 'DISCIPLINARY_SANCTION',
+    // --- Pénalités (CdC section 3.2) ---
+    ABSENCE_SHORT = 'ABSENCE_SHORT',         // absence non planifiée ≤ 2 jours → -5 pts
+    ABSENCE_LONG = 'ABSENCE_LONG',           // absence non planifiée > 2 jours → -10 pts
+    UNPLANNED_ABSENCE = 'UNPLANNED_ABSENCE', // legacy : alias de ABSENCE_SHORT
+    DELAY = 'DELAY',                         // retard dès le 2ème/mois → -0.5 pt
+    DISCIPLINARY_SANCTION = 'DISCIPLINARY_SANCTION', // renvoi 1j → -5 pts
+    // --- Autres mouvements ---
     XMALL_PURCHASE = 'XMALL_PURCHASE',
     MANUAL_ADJUSTMENT = 'MANUAL_ADJUSTMENT',
     ABSENCE_PENALTY = 'ABSENCE_PENALTY',
