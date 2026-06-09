@@ -198,6 +198,36 @@ export class UsersController {
         };
     }
 
+    @UseGuards(JwtAuthGuard)
+    @Patch('me/recovery-email')
+    async updateMyRecoveryEmail(
+        @Body() body: { email: string },
+        @Request() req: any,
+        @Ip() ip: string
+    ) {
+        if (!body.email) throw new BadRequestException('Email is required');
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(body.email)) {
+            throw new BadRequestException('Invalid email format');
+        }
+
+        const user = await this.usersService.findById(req.user.id);
+        if (!user) throw new NotFoundException('User not found');
+
+        await this.usersService.update(user.id, { personalEmail: body.email });
+
+        await this.auditService.log(
+            user.id,
+            'UPDATE_OWN_RECOVERY_EMAIL',
+            user.id,
+            'User',
+            { newEmail: body.email },
+            ip
+        );
+
+        return { message: 'Recovery email updated successfully' };
+    }
+
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.HR_ADMIN)
     @Patch(':matricule/recovery-email')
@@ -212,7 +242,7 @@ export class UsersController {
         if (!emailRegex.test(body.email)) {
             throw new BadRequestException('Invalid email format');
         }
-        
+
         const user = await this.usersService.findOneByMatricule(matricule);
         if (!user) throw new NotFoundException('User not found');
 
@@ -224,36 +254,6 @@ export class UsersController {
             user.id,
             'User',
             { matricule: user.matricule, newEmail: body.email },
-            ip
-        );
-
-        return { message: 'Recovery email updated successfully' };
-    }
-
-    @UseGuards(JwtAuthGuard)
-    @Patch('me/recovery-email')
-    async updateMyRecoveryEmail(
-        @Body() body: { email: string },
-        @Request() req: any,
-        @Ip() ip: string
-    ) {
-        if (!body.email) throw new BadRequestException('Email is required');
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(body.email)) {
-            throw new BadRequestException('Invalid email format');
-        }
-        
-        const user = await this.usersService.findById(req.user.id);
-        if (!user) throw new NotFoundException('User not found');
-
-        await this.usersService.update(user.id, { personalEmail: body.email });
-
-        await this.auditService.log(
-            user.id,
-            'UPDATE_OWN_RECOVERY_EMAIL',
-            user.id,
-            'User',
-            { newEmail: body.email },
             ip
         );
 

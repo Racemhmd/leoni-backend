@@ -241,7 +241,8 @@ export class UsersService implements OnApplicationBootstrap {
                     if (userRole) rolesCache.set(roleName, userRole);
                 }
 
-                const hashedPassword = await bcrypt.hash('password123', 10);
+                const defaultPassword = process.env.SEED_BULK_PASSWORD || 'MotivUp@Change1';
+                const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
                 // Enforce group for EMPLOYEE
                 const groupStr = group ? String(group).trim() : undefined;

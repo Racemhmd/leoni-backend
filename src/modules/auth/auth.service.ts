@@ -1,13 +1,13 @@
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { randomInt } from 'crypto';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { AuditService } from '../audit/audit.service';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, MoreThan } from 'typeorm';
 import { PasswordResetToken } from '../../database/entities/password-reset-token.entity';
 import { EmailService } from '../email/email.service';
-import { MoreThan } from 'typeorm';
 
 @Injectable()
 export class AuthService {
@@ -38,19 +38,13 @@ export class AuthService {
         if (await bcrypt.compare(pass, user.password)) {
             await this.usersService.logSuccessfulLogin(user.id);
 
-            // Log Login Audit
             await this.auditService.log(
                 user.id,
                 'USER_LOGIN',
                 user.id,
                 'User',
                 { matricule: user.matricule },
-                undefined, // IP not easily available here, handled in Controller usually. 
-                // For now undefined, or we pass request to validateUser? 
-                // AuthGuard calls validateUser.
-                // Let's settle for no IP here for now or pass 'N/A'.
-                // The controller can't easily log this because Guard handles it.
-                // Guard doesn't pass IP.
+                undefined,
                 { matricule: user.matricule, role: user.role?.name || 'EMPLOYEE' }
             );
 
@@ -65,7 +59,7 @@ export class AuthService {
     async login(user: any) {
         const role = user.role?.name || 'EMPLOYEE';
         const payload = {
-            username: user.matricule, // kept for backward compatibility if any
+            username: user.matricule,
             matricule: user.matricule,
             sub: user.id,
             role: role,
@@ -73,11 +67,10 @@ export class AuthService {
             mustChangePassword: user.mustChangePassword
         };
 
-        // Filter user object for frontend
         const userResponse = { ...user, role: payload.role };
         if (role !== 'EMPLOYEE') {
             delete userResponse.pointsBalance;
-            delete userResponse.points_balance; // Just in case of different naming conventions in the object
+            delete userResponse.points_balance;
         }
 
         return {
@@ -113,29 +106,21 @@ export class AuthService {
     }
 
     async forgotPassword(matricule: string, email: string): Promise<void> {
-        console.log(`[Auth Service] Looking up user with matricule: ${matricule}`);
         const user = await this.usersService.findOneByMatricule(matricule);
-        
+
         if (!user) {
-            console.log(`[Auth Service] User not found for matricule: ${matricule}. Returning generic response silently.`);
-            return; // Generic response
+            return; // Generic response — do not reveal user existence
         }
 
-        console.log(`[Auth Service] User found. Verifying personalEmail existence.`);
         if (!user.personalEmail) {
-            console.warn(`[Auth Service] User ${user.id} does not have a personalEmail set. Throwing error.`);
             throw new BadRequestException('Please contact HR Admin to update your recovery email.');
         }
 
-        console.log(`[Auth Service] Comparing provided email with DB personalEmail/enterprise email.`);
         if (user.personalEmail !== email && user.email !== email) {
-            console.log(`[Auth Service] Email mismatch for user ${user.id}. Returning generic response silently.`);
-            return; // Generic response
+            return; // Generic response — do not reveal email mismatch
         }
 
-        console.log(`[Auth Service] Email matches. Generating reset code.`);
-        // Check rate limiting / brute force (Optional but recommended)
-        // Here we just limit to not spamming. Let's see if there's a recent token
+        // Rate-limit: one active token per user at a time
         const recentToken = await this.passwordResetTokenRepo.findOne({
             where: {
                 userId: user.id,
@@ -145,13 +130,15 @@ export class AuthService {
             order: { createdAt: 'DESC' }
         });
 
-        // Generate a 6-digit verification code
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        
-        // Hash the code before saving
+        if (recentToken) {
+            // An unexpired code already exists — silently return to prevent spam
+            return;
+        }
+
+        // Use cryptographically secure random integer (not Math.random)
+        const code = randomInt(100000, 1000000).toString();
         const codeHash = await bcrypt.hash(code, 10);
 
-        // Expiration time: 10 minutes
         const expiresAt = new Date();
         expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
@@ -162,35 +149,26 @@ export class AuthService {
             used: false
         });
 
-        try {
-            console.log(`[Auth Service] Saving token to database for user ${user.id}.`);
-            await this.passwordResetTokenRepo.save(token);
+        await this.passwordResetTokenRepo.save(token);
 
-            console.log(`[Auth Service] Attempting to send reset email via EmailService.`);
-            const targetEmail = (user.personalEmail === email) ? user.personalEmail : user.email;
-            await this.emailService.sendPasswordResetEmail(targetEmail, code, 10);
+        const targetEmail = user.personalEmail ?? user.email;
+        await this.emailService.sendPasswordResetEmail(targetEmail, code, 10);
 
-            console.log(`[Auth Service] Logging audit event for password reset request.`);
-            await this.auditService.log(
-                user.id,
-                'PASSWORD_RESET_REQUESTED',
-                user.id,
-                'User',
-                { matricule: user.matricule }
-            );
-        } catch (dbOrEmailError) {
-            console.error('[Forgot Password Service Error]:', dbOrEmailError);
-            throw dbOrEmailError;
-        }
+        await this.auditService.log(
+            user.id,
+            'PASSWORD_RESET_REQUESTED',
+            user.id,
+            'User',
+            { matricule: user.matricule }
+        );
     }
 
     async resetPassword(matricule: string, code: string, newPassword: string): Promise<void> {
         const user = await this.usersService.findOneByMatricule(matricule);
         if (!user) {
-            throw new BadRequestException('Invalid reset request'); // Keep generic
+            throw new BadRequestException('Invalid reset request');
         }
 
-        // Find the latest unused token for this user
         const token = await this.passwordResetTokenRepo.findOne({
             where: {
                 userId: user.id,
@@ -204,13 +182,11 @@ export class AuthService {
             throw new BadRequestException('Invalid or expired verification code');
         }
 
-        // Verify the code
         const isCodeValid = await bcrypt.compare(code, token.codeHash);
         if (!isCodeValid) {
             throw new BadRequestException('Invalid or expired verification code');
         }
 
-        // Validate new password rules
         const hasLetters = /[a-zA-Z]/.test(newPassword);
         const hasNumbers = /\d/.test(newPassword);
 
@@ -218,18 +194,16 @@ export class AuthService {
             throw new BadRequestException('Password must be at least 8 characters long and contain both letters and numbers');
         }
 
-        // Update user's password
+        // Invalidate token BEFORE updating password — prevents replay even on partial failure
+        token.used = true;
+        await this.passwordResetTokenRepo.save(token);
+
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         await this.usersService.update(user.id, {
             password: hashedPassword,
             mustChangePassword: false
         });
 
-        // Mark token as used
-        token.used = true;
-        await this.passwordResetTokenRepo.save(token);
-
-        // Audit Log
         await this.auditService.log(
             user.id,
             'PASSWORD_RESET_COMPLETED',

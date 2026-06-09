@@ -6,6 +6,7 @@ import { PointTransaction, TransactionType, PointReason } from '../../database/e
 import { User } from '../../database/entities/user.entity';
 import { NotificationType } from '../../database/entities/notification.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SmsService } from '../notifications/sms.service';
 import { POINT_TO_DT_RATE } from '../../config/points-rules.config';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,6 +121,7 @@ export class LiquidationService {
         private usersRepo: Repository<User>,
         private dataSource: DataSource,
         private notificationsService: NotificationsService,
+        private smsService: SmsService,
     ) { }
 
     // ── Utilitaires sessions ──────────────────────────────────────────────────
@@ -400,13 +402,20 @@ export class LiquidationService {
                 // Déduire les points liquidés du solde
                 await manager.decrement(User, { id: emp.userId }, 'pointsBalance', emp.netPoints);
 
-                // Notifier l'employé
+                // Notifier l'employé (push in-app)
                 await this.notificationsService.createNotification({
                     employeeId: emp.userId,
                     title: `${session.name} effectuée`,
                     message: `Félicitations ! ${emp.netPoints} points ont été convertis en ${emp.amountDT} DT.`,
                     type: NotificationType.REMINDER,
                 });
+
+                // SMS (best-effort, respecte l'opt-in notifSmsLiquidation)
+                this.smsService.notifyUser(
+                    emp.userId,
+                    `MotivUp: ${session.shortName} — ${emp.netPoints} pts convertis en ${emp.amountDT} DT. Bravo !`,
+                    'liquidation',
+                ).catch(() => {});
             });
 
             executed++;

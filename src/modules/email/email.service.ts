@@ -51,9 +51,16 @@ export class EmailService {
       </div>
     `;
 
+    // Dev fallback: log code to console when SMTP is not configured
     if (!this.transporter) {
-       this.logger.error('Attempted to send email but SMTP is not configured properly.');
-       throw new InternalServerErrorException('Email service is not configured correctly.');
+      if (process.env.NODE_ENV !== 'production') {
+        this.logger.warn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        this.logger.warn(`[DEV] Reset code for ${to}: ${code}`);
+        this.logger.warn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        return; // Skip actual email in dev
+      }
+      this.logger.error('Attempted to send email but SMTP is not configured properly.');
+      throw new InternalServerErrorException('Email service is not configured correctly.');
     }
 
     try {
@@ -67,6 +74,10 @@ export class EmailService {
       this.logger.log(`Password reset email sent to ${to}`);
     } catch (error) {
       this.logger.error(`Failed to send email to ${to}: ${error.message}`, error.stack);
+      if (process.env.NODE_ENV !== 'production') {
+        this.logger.warn(`[DEV] SMTP failed. Reset code for ${to}: ${code}`);
+        return; // Don't crash in dev
+      }
       throw new InternalServerErrorException('Email service encountered an error while sending.');
     }
   }

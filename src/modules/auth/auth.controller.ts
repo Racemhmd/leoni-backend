@@ -40,24 +40,30 @@ export class AuthController {
         const role = user.role?.name || 'EMPLOYEE';
 
         const response: any = {
+            id: user.id,
             matricule: user.matricule,
             fullName: user.fullName,
             role: role,
             personalEmail: user.personalEmail,
+            phoneNumber: user.phoneNumber,
+            avatarUrl: user.avatarUrl,
+            department: user.department,
+            group: user.group,
+            plant: user.plant,
+            notifPushPoints: user.notifPushPoints,
+            notifPushLiquidation: user.notifPushLiquidation,
+            notifSmsPoints: user.notifSmsPoints,
+            notifSmsLiquidation: user.notifSmsLiquidation,
+            keepPointsAtLiquidation: user.keepPointsAtLiquidation,
+            leave_balance: user.leaveBalance,
         };
 
         if (role === 'EMPLOYEE') {
             response.points_balance = user.pointsBalance;
+            response.pointsBalance = user.pointsBalance;
         }
 
-        // return response; // Just return strict structure
-        return {
-            ...response,
-            leave_balance: user.leaveBalance // Keep leave balance for all or restrict? User asked for points mainly. 
-            // "HR_ADMIN and SUPERVISOR users must NOT have points balance"
-            // Rules didn't explicitly safeguard leave_balance but context implies "Employee Dashboard" features.
-            // I'll leave leave_balance for now as it wasn't strictly forbidden like points.
-        };
+        return response;
     }
 
     @UseGuards(JwtAuthGuard)
@@ -98,11 +104,7 @@ export class AuthController {
             console.error('[Forgot Password Error]:', error);
             
             // Ensure JSON response for server errors
-            throw new InternalServerErrorException({
-                statusCode: 500,
-                message: 'An internal server error occurred',
-                error: error.message || 'Unknown error'
-            });
+            throw new InternalServerErrorException('An internal server error occurred');
         }
     }
 
@@ -125,11 +127,7 @@ export class AuthController {
                 throw error;
             }
             console.error('[Reset Password Error]:', error);
-            throw new InternalServerErrorException({
-                statusCode: 500,
-                message: 'An internal server error occurred',
-                error: error.message || 'Unknown error'
-            });
+            throw new InternalServerErrorException('An internal server error occurred');
         }
     }
 }
