@@ -1,15 +1,18 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+    Injectable,
+    BadRequestException,
+    ForbiddenException,
+    NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
 import { LeaveRequest, LeaveStatus, LeaveType } from '../../database/entities/leave.entity';
-import { User } from '../../database/entities/user.entity'; // Assuming User entity path
+import { User } from '../../database/entities/user.entity';
 import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
 import { UpdateLeaveStatusDto } from './dto/update-leave-status.dto';
 import { QueryLeaveRequestsDto } from './dto/query-leave-requests.dto';
 import { NotificationsService } from '../notifications/notifications.service';
-import { LtgIntegrationService } from './ltg-integration.service';
 import { NotificationType } from '../../database/entities/notification.entity';
-// ... (imports)
 
 @Injectable()
 export class LeavesService {
@@ -19,374 +22,393 @@ export class LeavesService {
         @InjectRepository(User)
         private userRepository: Repository<User>,
         private notificationsService: NotificationsService,
-        private ltgService: LtgIntegrationService,
-    ) { }
+    ) {}
+
+    // ── Reference data ──────────────────────────────────────────────────────
 
     async getLeaveTypes() {
         return [
-            { code: LeaveType.ANNUAL_LEAVE, label: 'Congé Annuel', requiresBalance: true },
-            { code: LeaveType.AUTHORIZED_ABSENCE, label: 'Absence Autorisée (AA)', requiresBalance: false },
-            { code: LeaveType.INSUFFICIENT_BALANCE, label: 'Congé avec Solde Insuffisant', requiresBalance: false },
+            { code: LeaveType.ANNUAL_LEAVE,         label: 'Congé Annuel',                     requiresBalance: true  },
+            { code: LeaveType.AUTHORIZED_ABSENCE,   label: 'Absence Autorisée (AA)',             requiresBalance: false },
+            { code: LeaveType.INSUFFICIENT_BALANCE, label: 'Congé avec Solde Insuffisant',       requiresBalance: false },
         ];
     }
 
-    async getMyLeaveRequests(employeeId: number, query: QueryLeaveRequestsDto): Promise<LeaveRequest[]> {
-        const where: any = { employeeId };
-
-        if (query.status) {
-            where.status = query.status;
-        }
-
-        if (query.startDate && query.endDate) {
-            where.startDate = Between(new Date(query.startDate), new Date(query.endDate));
-        } else if (query.startDate) {
-            where.startDate = MoreThanOrEqual(new Date(query.startDate));
-        } else if (query.endDate) {
-            where.endDate = LessThanOrEqual(new Date(query.endDate));
-        }
-
-        const requests = await this.leaveRequestRepository.find({
-            where,
-            order: { createdAt: 'DESC' },
-            relations: ['reviewer'],
-        });
-
-        // Sync with LTG for pending requests
-        for (const req of requests) {
-            const pendingStatuses = [
-                LeaveStatus.PENDING_LTG,
-                LeaveStatus.PENDING_SUPERVISOR,
-                LeaveStatus.APPROVED_SUPERVISOR,
-                LeaveStatus.PENDING_HR,
-                LeaveStatus.APPROVED_HR
-            ];
-
-            if (pendingStatuses.includes(req.status)) {
-                const newStatus = await this.ltgService.pollLtgStatus(req.id);
-                if (newStatus !== req.status) {
-                    req.status = newStatus;
-                    await this.leaveRequestRepository.save(req);
-                }
-            }
-        }
-
-        return requests;
-    }
-
-    async getPendingRequests(supervisorId?: number): Promise<LeaveRequest[]> {
-        const queryBuilder = this.leaveRequestRepository
-            .createQueryBuilder('leave')
-            .leftJoinAndSelect('leave.employee', 'employee')
-            .leftJoinAndSelect('employee.supervisor', 'supervisor')
-            // Show requests pending supervisor if I am the supervisor
-            .where('leave.status = :status', { status: supervisorId ? LeaveStatus.PENDING_SUPERVISOR : LeaveStatus.PENDING_HR });
-
-        if (supervisorId) {
-            queryBuilder.andWhere('supervisor.id = :supervisorId', { supervisorId });
-        }
-
-        return queryBuilder.orderBy('leave.createdAt', 'ASC').getMany();
-    }
-
-    async getTeamLeaveRequests(supervisorId: number, query: QueryLeaveRequestsDto): Promise<LeaveRequest[]> {
-        const queryBuilder = this.leaveRequestRepository
-            .createQueryBuilder('leave')
-            .leftJoinAndSelect('leave.employee', 'employee')
-            .leftJoinAndSelect('employee.supervisor', 'supervisor')
-            .leftJoinAndSelect('leave.reviewer', 'reviewer')
-            .where('supervisor.id = :supervisorId', { supervisorId });
-
-        if (query.status) {
-            queryBuilder.andWhere('leave.status = :status', { status: query.status });
-        }
-
-        if (query.employeeId) {
-            queryBuilder.andWhere('employee.id = :employeeId', { employeeId: query.employeeId });
-        }
-
-        return queryBuilder.orderBy('leave.createdAt', 'DESC').getMany();
-    }
-
-    async getAllLeaveRequests(query: QueryLeaveRequestsDto): Promise<LeaveRequest[]> {
-        const where: any = {};
-
-        if (query.status) {
-            where.status = query.status;
-        }
-
-        if (query.employeeId) {
-            where.employeeId = query.employeeId;
-        }
-
-        return this.leaveRequestRepository.find({
-            where,
-            order: { createdAt: 'DESC' },
-            relations: ['employee', 'reviewer'],
-        });
-    }
-
-    async getLeaveRequestById(id: number): Promise<LeaveRequest> {
-        const leaveRequest = await this.leaveRequestRepository.findOne({
-            where: { id },
-            relations: ['employee', 'reviewer', 'supervisor'],
-        });
-
-        if (!leaveRequest) {
-            throw new NotFoundException('Leave request not found');
-        }
-
-        return leaveRequest;
-    }
+    // ── Employee: create request ─────────────────────────────────────────────
 
     async createLeaveRequest(employeeId: number, dto: CreateLeaveRequestDto): Promise<LeaveRequest> {
-        // Validate dates
         const startDate = new Date(dto.startDate);
-        const endDate = new Date(dto.endDate);
+        const endDate   = new Date(dto.endDate);
 
         if (endDate < startDate) {
             throw new BadRequestException('End date must be after or equal to start date');
         }
 
-        // Calculate days
-        const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-        const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        const days = Math.ceil(Math.abs(endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-        // Check for overlapping leave requests
-        const hasOverlap = await this.checkOverlappingLeaves(employeeId, startDate, endDate);
-        if (hasOverlap) {
+        if (await this.checkOverlappingLeaves(employeeId, startDate, endDate)) {
             throw new BadRequestException('You already have a leave request for this period');
         }
 
-        // Validate Leave Type and Balance
         if (dto.leaveType === LeaveType.ANNUAL_LEAVE) {
             const user = await this.userRepository.findOne({ where: { id: employeeId } });
             if (!user) throw new BadRequestException('User not found');
-
             if (user.leaveBalance < days) {
-                throw new BadRequestException(`Insufficient leave balance for Annual Leave. Balance: ${user.leaveBalance}, Requested: ${days}`);
+                throw new BadRequestException(
+                    `Solde insuffisant. Disponible : ${user.leaveBalance} j, demandé : ${days} j`,
+                );
             }
         }
 
-        // Validate Supervisor existence and Role
-        const supervisor = await this.userRepository.findOne({ where: { id: dto.supervisorId }, relations: ['role'] });
-        if (!supervisor) {
-            throw new BadRequestException('Selected supervisor not found');
-        }
-        if (supervisor.role?.name !== 'SUPERVISOR') {
-            throw new BadRequestException('Selected user is not a Supervisor');
-        }
-        if (supervisor.id === employeeId) {
-            throw new BadRequestException('You cannot select yourself as Supervisor');
-        }
+        // Validate supervisor
+        const supervisor = await this.userRepository.findOne({
+            where: { id: dto.supervisorId },
+            relations: ['role'],
+        });
+        if (!supervisor) throw new BadRequestException('Superviseur introuvable');
+        if (supervisor.role?.name !== 'SUPERVISOR') throw new BadRequestException('L\'utilisateur sélectionné n\'est pas superviseur');
+        if (supervisor.id === employeeId) throw new BadRequestException('Vous ne pouvez pas vous désigner vous-même');
 
-        // Validate HR Admin existence and Role
-        const hrAdmin = await this.userRepository.findOne({ where: { id: dto.hrAdminId }, relations: ['role'] });
-        if (!hrAdmin) {
-            throw new BadRequestException('Selected HR Admin not found');
-        }
-        if (hrAdmin.role?.name !== 'HR_ADMIN') {
-            throw new BadRequestException('Selected user is not an HR Admin');
-        }
-        if (hrAdmin.id === employeeId) {
-            throw new BadRequestException('You cannot select yourself as HR Admin');
-        }
+        // Validate HR admin
+        const hrAdmin = await this.userRepository.findOne({
+            where: { id: dto.hrAdminId },
+            relations: ['role'],
+        });
+        if (!hrAdmin) throw new BadRequestException('Administrateur RH introuvable');
+        if (hrAdmin.role?.name !== 'HR_ADMIN') throw new BadRequestException('L\'utilisateur sélectionné n\'est pas un Admin RH');
+        if (hrAdmin.id === employeeId) throw new BadRequestException('Vous ne pouvez pas vous désigner vous-même');
 
-        // Create leave request
         const leaveRequest = this.leaveRequestRepository.create({
             employeeId,
-            leaveType: dto.leaveType,
+            leaveType:    dto.leaveType,
             startDate,
             endDate,
-            reason: dto.reason,
+            reason:       dto.reason,
             supervisorId: dto.supervisorId,
-            hrAdminId: dto.hrAdminId, // Added
-            status: LeaveStatus.PENDING_LTG, // Skip internal steps for now
+            hrAdminId:    dto.hrAdminId,
+            status:       LeaveStatus.PENDING_SUPERVISOR,
         });
 
         const saved = await this.leaveRequestRepository.save(leaveRequest);
 
-        // Submit to LTG immediately as per new requirement
-        try {
-            await this.ltgService.submitToLtg(saved);
-        } catch (e) {
-            console.error('LTG Submit failed', e);
-            // We might want to rollback or mark as failed, but for now we keep it PENDING_LTG to retry?
-        }
-
-        // Notify Supervisor
+        // Notify selected supervisor
         await this.notificationsService.createNotification({
             employeeId: dto.supervisorId,
-            title: 'New Leave Request',
-            message: `A new leave request has been assigned to you for review.`,
-            type: NotificationType.LEAVE_UPDATE,
+            title:   'Nouvelle demande de congé',
+            message: `Une demande de congé vous a été assignée pour validation.`,
+            type:    NotificationType.LEAVE_UPDATE,
         });
 
-        // Notify Employee
+        // Notify employee that submission was successful
         await this.notificationsService.createNotification({
-            employeeId: employeeId,
-            title: 'Leave Request Submitted',
-            message: `Your leave request has been submitted.`,
-            type: NotificationType.LEAVE_UPDATE,
+            employeeId,
+            title:   'Demande soumise',
+            message: `Votre demande de congé a été soumise et attend la validation de votre superviseur.`,
+            type:    NotificationType.LEAVE_UPDATE,
         });
 
         return saved;
     }
 
-    async approveBySupervisor(requestId: number, supervisorId: number, assignToHrId: number, notes?: string): Promise<LeaveRequest> {
+    // ── Employee: my requests ────────────────────────────────────────────────
+
+    async getMyLeaveRequests(employeeId: number, query: QueryLeaveRequestsDto): Promise<LeaveRequest[]> {
+        const where: any = { employeeId };
+        if (query.status)    where.status    = query.status;
+        if (query.startDate && query.endDate) {
+            where.startDate = Between(new Date(query.startDate), new Date(query.endDate));
+        } else if (query.startDate) {
+            where.startDate = MoreThanOrEqual(new Date(query.startDate));
+        } else if (query.endDate) {
+            where.endDate   = LessThanOrEqual(new Date(query.endDate));
+        }
+
+        return this.leaveRequestRepository.find({
+            where,
+            order: { createdAt: 'DESC' },
+            relations: ['supervisor', 'hrAdmin'],
+        });
+    }
+
+    // ── Supervisor: pending requests assigned to them ────────────────────────
+
+    async getSupervisorRequests(supervisorId: number): Promise<LeaveRequest[]> {
+        return this.leaveRequestRepository.find({
+            where: { supervisorId, status: LeaveStatus.PENDING_SUPERVISOR },
+            order: { createdAt: 'ASC' },
+            relations: ['employee'],
+        });
+    }
+
+    // ── HR Admin: requests approved by supervisor assigned to them ───────────
+
+    async getHrRequests(hrAdminId: number): Promise<LeaveRequest[]> {
+        return this.leaveRequestRepository.find({
+            where: { hrAdminId, status: LeaveStatus.APPROVED_BY_SUPERVISOR },
+            order: { supervisorDecisionAt: 'DESC' },
+            relations: ['employee', 'supervisor'],
+        });
+    }
+
+    // ── Legacy: pending list (kept for admin KPI count) ──────────────────────
+
+    async getPendingRequests(supervisorId?: number): Promise<LeaveRequest[]> {
+        if (supervisorId) {
+            return this.getSupervisorRequests(supervisorId);
+        }
+        // HR_ADMIN: show all requests awaiting HR decision
+        return this.leaveRequestRepository.find({
+            where: { status: LeaveStatus.APPROVED_BY_SUPERVISOR },
+            order: { createdAt: 'ASC' },
+            relations: ['employee', 'supervisor'],
+        });
+    }
+
+    async getTeamLeaveRequests(supervisorId: number, query: QueryLeaveRequestsDto): Promise<LeaveRequest[]> {
+        const qb = this.leaveRequestRepository
+            .createQueryBuilder('leave')
+            .leftJoinAndSelect('leave.employee', 'employee')
+            .where('leave.supervisorId = :supervisorId', { supervisorId });
+
+        if (query.status) qb.andWhere('leave.status = :status', { status: query.status });
+        return qb.orderBy('leave.createdAt', 'DESC').getMany();
+    }
+
+    async getAllLeaveRequests(query: QueryLeaveRequestsDto): Promise<LeaveRequest[]> {
+        const where: any = {};
+        if (query.status)     where.status     = query.status;
+        if (query.employeeId) where.employeeId = query.employeeId;
+
+        return this.leaveRequestRepository.find({
+            where,
+            order: { createdAt: 'DESC' },
+            relations: ['employee', 'supervisor', 'hrAdmin'],
+        });
+    }
+
+    async getLeaveRequestById(id: number): Promise<LeaveRequest> {
+        const leave = await this.leaveRequestRepository.findOne({
+            where: { id },
+            relations: ['employee', 'supervisor', 'hrAdmin'],
+        });
+        if (!leave) throw new NotFoundException('Demande de congé introuvable');
+        return leave;
+    }
+
+    // ── Supervisor: approve ──────────────────────────────────────────────────
+
+    async approveBySupervisor(
+        requestId:    number,
+        supervisorId: number,
+        comment?:     string,
+    ): Promise<LeaveRequest> {
         const leave = await this.getLeaveRequestById(requestId);
 
         if (leave.status !== LeaveStatus.PENDING_SUPERVISOR) {
-            throw new BadRequestException('Request is not in Pending Supervisor state');
+            throw new BadRequestException('La demande n\'est pas en attente de validation superviseur');
         }
         if (leave.supervisorId !== supervisorId) {
-            throw new ForbiddenException('You are not the assigned supervisor for this request');
+            throw new ForbiddenException('Vous n\'êtes pas le superviseur assigné à cette demande');
         }
 
-        const hrAdmin = await this.userRepository.findOne({ where: { id: assignToHrId } });
-        if (!hrAdmin) throw new BadRequestException('Selected HR Admin not found');
-        // Check if role is HR_ADMIN if possible
-
-        leave.status = LeaveStatus.PENDING_HR;
-        leave.hrAdminId = assignToHrId;
-        leave.reviewedBy = supervisorId; // Traceability
-        leave.reviewedAt = new Date();
-        if (notes) leave.reviewNotes = notes;
+        leave.status               = LeaveStatus.APPROVED_BY_SUPERVISOR;
+        leave.supervisorDecisionAt = new Date();
+        leave.supervisorComment    = comment ?? null;
+        leave.reviewedBy           = supervisorId;
+        leave.reviewedAt           = new Date();
 
         const saved = await this.leaveRequestRepository.save(leave);
 
-        // Notify HR
+        // Notify assigned HR admin
         await this.notificationsService.createNotification({
-            employeeId: assignToHrId,
-            title: 'Leave Request Pending HR Approval',
-            message: `A leave request (approved by supervisor) needs your validation.`,
-            type: NotificationType.LEAVE_UPDATE,
+            employeeId: leave.hrAdminId,
+            title:   'Demande de congé à valider',
+            message: `Une demande de congé approuvée par le superviseur attend votre validation finale.`,
+            type:    NotificationType.LEAVE_UPDATE,
         });
 
-        // Notify Employee
+        // Notify employee
         await this.notificationsService.createNotification({
             employeeId: leave.employeeId,
-            title: 'Leave Request Approved',
-            message: `Your leave request has been approved by your supervisor.`,
-            type: NotificationType.LEAVE_UPDATE,
+            title:   'Congé approuvé par le superviseur',
+            message: `Votre demande de congé a été approuvée par votre superviseur. Elle est maintenant en attente de la validation RH.`,
+            type:    NotificationType.LEAVE_UPDATE,
         });
 
         return saved;
     }
 
-    async approveByHr(requestId: number, hrId: number, notes?: string): Promise<LeaveRequest> {
+    // ── Supervisor: reject ───────────────────────────────────────────────────
+
+    async rejectBySupervisor(
+        requestId:    number,
+        supervisorId: number,
+        comment?:     string,
+    ): Promise<LeaveRequest> {
         const leave = await this.getLeaveRequestById(requestId);
 
-        if (leave.status !== LeaveStatus.PENDING_HR) {
-            throw new BadRequestException('Request is not in Pending HR state');
+        if (leave.status !== LeaveStatus.PENDING_SUPERVISOR) {
+            throw new BadRequestException('La demande n\'est pas en attente de validation superviseur');
         }
-        if (leave.hrAdminId !== hrId) {
-            // In some models, any HR can approve, but here we enforce the assigned one for strict workflow
-            throw new ForbiddenException('You are not the assigned HR Admin for this request');
+        if (leave.supervisorId !== supervisorId) {
+            throw new ForbiddenException('Vous n\'êtes pas le superviseur assigné à cette demande');
         }
 
-        leave.status = LeaveStatus.PENDING_LTG;
-        leave.reviewedBy = hrId; // Trace
-        leave.reviewedAt = new Date();
-        if (notes) leave.reviewNotes = notes;
+        leave.status               = LeaveStatus.REJECTED_BY_SUPERVISOR;
+        leave.supervisorDecisionAt = new Date();
+        leave.supervisorComment    = comment ?? null;
+        leave.reviewedBy           = supervisorId;
+        leave.reviewedAt           = new Date();
 
         const saved = await this.leaveRequestRepository.save(leave);
 
-        // Submit to LTG
-        try {
-            await this.ltgService.submitToLtg(saved);
-        } catch (e) {
-            console.error('LTG Submit failed', e);
+        // Notify employee
+        await this.notificationsService.createNotification({
+            employeeId: leave.employeeId,
+            title:   'Congé refusé',
+            message: `Votre demande de congé a été refusée par votre superviseur.${comment ? ' Motif : ' + comment : ''}`,
+            type:    NotificationType.LEAVE_UPDATE,
+        });
+
+        return saved;
+    }
+
+    // ── HR Admin: final approve ──────────────────────────────────────────────
+
+    async approveByHr(
+        requestId: number,
+        hrId:      number,
+        comment?:  string,
+    ): Promise<LeaveRequest> {
+        const leave = await this.getLeaveRequestById(requestId);
+
+        if (leave.status !== LeaveStatus.APPROVED_BY_SUPERVISOR) {
+            throw new BadRequestException('La demande n\'a pas encore été approuvée par le superviseur');
+        }
+        if (leave.hrAdminId !== hrId) {
+            throw new ForbiddenException('Vous n\'êtes pas l\'administrateur RH assigné à cette demande');
+        }
+
+        leave.status       = LeaveStatus.APPROVED_BY_HR;
+        leave.hrDecisionAt = new Date();
+        leave.hrComment    = comment ?? null;
+        leave.reviewedBy   = hrId;
+        leave.reviewedAt   = new Date();
+
+        const saved = await this.leaveRequestRepository.save(leave);
+
+        // Notify employee
+        await this.notificationsService.createNotification({
+            employeeId: leave.employeeId,
+            title:   'Congé définitivement approuvé',
+            message: `Votre demande de congé a été approuvée par l'Administration RH.`,
+            type:    NotificationType.LEAVE_UPDATE,
+        });
+
+        // Optionally notify supervisor
+        if (leave.supervisorId) {
+            await this.notificationsService.createNotification({
+                employeeId: leave.supervisorId,
+                title:   'Congé validé par RH',
+                message: `La demande de congé que vous avez approuvée a été définitivement validée par l'Administration RH.`,
+                type:    NotificationType.LEAVE_UPDATE,
+            });
         }
 
         return saved;
     }
 
-    async rejectLeaveRequest(
+    // ── HR Admin: final reject ───────────────────────────────────────────────
+
+    async rejectByHr(
         requestId: number,
-        reviewerId: number,
-        dto: UpdateLeaveStatusDto,
+        hrId:      number,
+        comment?:  string,
     ): Promise<LeaveRequest> {
-        const leaveRequest = await this.getLeaveRequestById(requestId);
+        const leave = await this.getLeaveRequestById(requestId);
 
-        // Can reject at any pending stage
-        const isPending = [LeaveStatus.PENDING_SUPERVISOR, LeaveStatus.PENDING_HR].includes(leaveRequest.status as LeaveStatus);
-
-        if (!isPending) {
-            throw new BadRequestException('Request is not in a pending state');
+        if (leave.status !== LeaveStatus.APPROVED_BY_SUPERVISOR) {
+            throw new BadRequestException('La demande n\'a pas encore été approuvée par le superviseur');
+        }
+        if (leave.hrAdminId !== hrId) {
+            throw new ForbiddenException('Vous n\'êtes pas l\'administrateur RH assigné à cette demande');
         }
 
-        // Prevent self-rejection
-        if (leaveRequest.employeeId === reviewerId) {
-            throw new ForbiddenException('You cannot reject your own leave request');
-        }
+        leave.status       = LeaveStatus.REJECTED_BY_HR;
+        leave.hrDecisionAt = new Date();
+        leave.hrComment    = comment ?? null;
+        leave.reviewedBy   = hrId;
+        leave.reviewedAt   = new Date();
 
-        // Validate ownership/authorisation
-        if (leaveRequest.status === LeaveStatus.PENDING_SUPERVISOR) {
-            if (leaveRequest.supervisorId !== reviewerId) {
-                throw new ForbiddenException('You are not the assigned supervisor for this request');
-            }
-        } else if (leaveRequest.status === LeaveStatus.PENDING_HR) {
-            if (leaveRequest.hrAdminId !== reviewerId) {
-                throw new ForbiddenException('You are not the assigned HR Admin for this request');
-            }
-        }
+        const saved = await this.leaveRequestRepository.save(leave);
 
-        // Update leave request
-        leaveRequest.status = LeaveStatus.REJECTED;
-        leaveRequest.reviewedBy = reviewerId;
-        leaveRequest.reviewedAt = new Date();
-        leaveRequest.reviewNotes = dto.reviewNotes || '';
-
-        const updated = await this.leaveRequestRepository.save(leaveRequest);
-
-        // Send notification to employee
+        // Notify employee
         await this.notificationsService.createNotification({
-            employeeId: leaveRequest.employeeId,
-            title: 'Leave Request Rejected',
-            message: `Your leave request has been rejected. Reason: ${dto.reviewNotes || 'No reason provided'}`,
-            type: NotificationType.LEAVE_UPDATE,
+            employeeId: leave.employeeId,
+            title:   'Congé refusé par RH',
+            message: `Votre demande de congé a été refusée par l'Administration RH.${comment ? ' Motif : ' + comment : ''}`,
+            type:    NotificationType.LEAVE_UPDATE,
         });
 
-        return updated;
+        return saved;
+    }
+
+    // ── Legacy reject (kept for existing endpoint compatibility) ─────────────
+
+    async rejectLeaveRequest(
+        requestId:  number,
+        reviewerId: number,
+        dto:        UpdateLeaveStatusDto,
+    ): Promise<LeaveRequest> {
+        const leave = await this.getLeaveRequestById(requestId);
+
+        if (leave.employeeId === reviewerId) {
+            throw new ForbiddenException('Vous ne pouvez pas rejeter votre propre demande');
+        }
+
+        if (leave.status === LeaveStatus.PENDING_SUPERVISOR) {
+            return this.rejectBySupervisor(requestId, reviewerId, dto.reviewNotes);
+        }
+        if (leave.status === LeaveStatus.APPROVED_BY_SUPERVISOR) {
+            return this.rejectByHr(requestId, reviewerId, dto.reviewNotes);
+        }
+
+        throw new BadRequestException('La demande n\'est pas dans un état rejetable');
     }
 
     async canReviewRequest(userId: number, requestId: number): Promise<boolean> {
-        const user = await this.userRepository.findOne({ where: { id: userId }, relations: ['role'] });
-        if (!user) return false;
-
-        const leaveRequest = await this.getLeaveRequestById(requestId);
-
-        if (user.role?.name === 'HR_ADMIN' && leaveRequest.status === LeaveStatus.PENDING_HR) {
-            return leaveRequest.hrAdminId === userId; // Enforce assignment
-        }
-
-        if (user.role?.name === 'SUPERVISOR' && leaveRequest.status === LeaveStatus.PENDING_SUPERVISOR) {
-            return leaveRequest.supervisorId === userId;
-        }
-
+        const leave = await this.getLeaveRequestById(requestId);
+        if (leave.supervisorId === userId && leave.status === LeaveStatus.PENDING_SUPERVISOR)      return true;
+        if (leave.hrAdminId    === userId && leave.status === LeaveStatus.APPROVED_BY_SUPERVISOR)  return true;
         return false;
     }
 
+    // ── Private helpers ──────────────────────────────────────────────────────
+
     private async checkOverlappingLeaves(
         employeeId: number,
-        startDate: Date,
-        endDate: Date,
+        startDate:  Date,
+        endDate:    Date,
         excludeId?: number,
     ): Promise<boolean> {
-        const queryBuilder = this.leaveRequestRepository
+        const qb = this.leaveRequestRepository
             .createQueryBuilder('leave')
             .where('leave.employeeId = :employeeId', { employeeId })
-            .andWhere('leave.status != :rejectedStatus', { rejectedStatus: LeaveStatus.REJECTED })
+            .andWhere('leave.status NOT IN (:...rejected)', {
+                rejected: [
+                    LeaveStatus.REJECTED_BY_SUPERVISOR,
+                    LeaveStatus.REJECTED_BY_HR,
+                ],
+            })
             .andWhere(
-                '(leave.startDate BETWEEN :startDate AND :endDate OR leave.endDate BETWEEN :startDate AND :endDate OR (:startDate BETWEEN leave.startDate AND leave.endDate))',
+                '(leave.startDate BETWEEN :startDate AND :endDate ' +
+                'OR leave.endDate BETWEEN :startDate AND :endDate ' +
+                'OR (:startDate BETWEEN leave.startDate AND leave.endDate))',
                 { startDate, endDate },
             );
 
-        if (excludeId) {
-            queryBuilder.andWhere('leave.id != :excludeId', { excludeId });
-        }
+        if (excludeId) qb.andWhere('leave.id != :excludeId', { excludeId });
 
-        const count = await queryBuilder.getCount();
-        return count > 0;
+        return (await qb.getCount()) > 0;
     }
 }
